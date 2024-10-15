@@ -112,6 +112,9 @@ struct PCMachineClass {
     bool smbios_legacy_mode;
     bool smbios_uuid_encoded;
     SmbiosEntryPointType default_smbios_ep_type;
+    /* New fields needed for Windows HardwareID-6 matching */
+    const char *smbios_stream_product;
+    const char *smbios_stream_version;
 
     /* RAM / address space compat: */
     bool gigabyte_align;
@@ -287,6 +290,39 @@ extern const size_t pc_compat_2_1_len;
 
 extern GlobalProperty pc_compat_2_0[];
 extern const size_t pc_compat_2_0_len;
+
+extern GlobalProperty pc_rhel_compat[];
+extern const size_t pc_rhel_compat_len;
+
+extern GlobalProperty pc_rhel_9_3_compat[];
+extern const size_t pc_rhel_9_3_compat_len;
+
+extern GlobalProperty pc_rhel_9_2_compat[];
+extern const size_t pc_rhel_9_2_compat_len;
+
+extern GlobalProperty pc_rhel_9_0_compat[];
+extern const size_t pc_rhel_9_0_compat_len;
+
+extern GlobalProperty pc_rhel_8_5_compat[];
+extern const size_t pc_rhel_8_5_compat_len;
+
+extern GlobalProperty pc_rhel_8_4_compat[];
+extern const size_t pc_rhel_8_4_compat_len;
+
+extern GlobalProperty pc_rhel_8_3_compat[];
+extern const size_t pc_rhel_8_3_compat_len;
+
+extern GlobalProperty pc_rhel_8_2_compat[];
+extern const size_t pc_rhel_8_2_compat_len;
+
+extern GlobalProperty pc_rhel_8_1_compat[];
+extern const size_t pc_rhel_8_1_compat_len;
+
+extern GlobalProperty pc_rhel_8_0_compat[];
+extern const size_t pc_rhel_8_0_compat_len;
+
+extern GlobalProperty pc_rhel_7_6_compat[];
+extern const size_t pc_rhel_7_6_compat_len;
 
 #define DEFINE_PC_MACHINE(suffix, namestr, initfn, optsfn) \
     static void pc_machine_##suffix##_class_init(ObjectClass *oc, void *data) \

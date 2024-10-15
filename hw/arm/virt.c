@@ -85,6 +85,7 @@
 #include "hw/char/pl011.h"
 #include "qemu/guest-random.h"
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static GlobalProperty arm_virt_compat[] = {
     { TYPE_VIRTIO_IOMMU_PCI, "aw-bits", "48" },
 };
@@ -128,7 +129,65 @@ static void arm_virt_compat_set(MachineClass *mc)
     DEFINE_VIRT_MACHINE_LATEST(major, minor, true)
 #define DEFINE_VIRT_MACHINE(major, minor) \
     DEFINE_VIRT_MACHINE_LATEST(major, minor, false)
+#endif /* disabled for RHEL */
 
+/*
+ * This variable is for changes to properties that are RHEL specific,
+ * different to the current upstream and to be applied to the latest
+ * machine type. They may be overriden by older machine compats.
+ *
+ * virtio-net-pci variant romfiles are not needed because edk2 does
+ * fully support the pxe boot. Besides virtio romfiles are not shipped
+ * on rhel/aarch64.
+ */
+GlobalProperty arm_rhel_compat[] = {
+    {"virtio-net-pci", "romfile", "" },
+    {"virtio-net-pci-transitional", "romfile", "" },
+    {"virtio-net-pci-non-transitional", "romfile", "" },
+    /* arm_rhel_compat from arm_virt_compat, added for 9.0.0 rebase */
+    { TYPE_VIRTIO_IOMMU_PCI, "aw-bits", "48" },
+};
+const size_t arm_rhel_compat_len = G_N_ELEMENTS(arm_rhel_compat);
+
+/*
+ * This cannot be called from the rhel_virt_class_init() because
+ * TYPE_RHEL_MACHINE is abstract and mc->compat_props g_ptr_array_new()
+ * only is called on virt-rhelm.n.s non abstract class init.
+ */
+static void arm_rhel_compat_set(MachineClass *mc)
+{
+    compat_props_add(mc->compat_props, arm_rhel_compat,
+                     arm_rhel_compat_len);
+}
+
+#define DEFINE_RHEL_MACHINE_LATEST(m, n, s, latest)                     \
+    static void rhel##m##n##s##_virt_class_init(ObjectClass *oc,        \
+                                                void *data)             \
+    {                                                                   \
+        MachineClass *mc = MACHINE_CLASS(oc);                           \
+        arm_rhel_compat_set(mc);                                        \
+        rhel##m##n##s##_virt_options(mc);                               \
+        mc->desc = "RHEL " # m "." # n "." # s " ARM Virtual Machine";  \
+        if (latest) {                                                   \
+            mc->alias = "virt";                                         \
+            mc->is_default = 1;                                         \
+        }                                                               \
+    }                                                                   \
+    static const TypeInfo rhel##m##n##s##_machvirt_info = {             \
+        .name = MACHINE_TYPE_NAME("virt-rhel" # m "." # n "." # s),     \
+        .parent = TYPE_RHEL_MACHINE,                                    \
+        .class_init = rhel##m##n##s##_virt_class_init,                  \
+    };                                                                  \
+    static void rhel##m##n##s##_machvirt_init(void)                     \
+    {                                                                   \
+        type_register_static(&rhel##m##n##s##_machvirt_info);           \
+    }                                                                   \
+    type_init(rhel##m##n##s##_machvirt_init);
+
+#define DEFINE_RHEL_MACHINE_AS_LATEST(major, minor, subminor)   \
+    DEFINE_RHEL_MACHINE_LATEST(major, minor, subminor, true)
+#define DEFINE_RHEL_MACHINE(major, minor, subminor)             \
+    DEFINE_RHEL_MACHINE_LATEST(major, minor, subminor, false)
 
 /* Number of external interrupt lines to configure the GIC with */
 #define NUM_IRQS 256
@@ -1651,7 +1710,7 @@ static void virt_build_smbios(VirtMachineState *vms)
 
     smbios_set_defaults("QEMU", product,
                         vmc->smbios_old_sys_ver ? "1.0" : mc->name,
-                        true);
+                        true, NULL, NULL);
 
     /* build the array of physical mem area from base_memmap */
     mem_array.address = vms->memmap[VIRT_MEM].base;
@@ -2355,6 +2414,7 @@ static void machvirt_init(MachineState *machine)
     qemu_add_machine_init_done_notifier(&vms->machine_done);
 }
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static bool virt_get_secure(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2382,6 +2442,7 @@ static void virt_set_virt(Object *obj, bool value, Error **errp)
 
     vms->virt = value;
 }
+#endif /* disabled for RHEL */
 
 static bool virt_get_highmem(Object *obj, Error **errp)
 {
@@ -2397,6 +2458,7 @@ static void virt_set_highmem(Object *obj, bool value, Error **errp)
     vms->highmem = value;
 }
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static bool virt_get_compact_highmem(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2410,6 +2472,7 @@ static void virt_set_compact_highmem(Object *obj, bool value, Error **errp)
 
     vms->highmem_compact = value;
 }
+#endif /* disabled for RHEL */
 
 static bool virt_get_highmem_redists(Object *obj, Error **errp)
 {
@@ -2453,7 +2516,6 @@ static void virt_set_highmem_mmio(Object *obj, bool value, Error **errp)
     vms->highmem_mmio = value;
 }
 
-
 static bool virt_get_its(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2468,6 +2530,7 @@ static void virt_set_its(Object *obj, bool value, Error **errp)
     vms->its = value;
 }
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static bool virt_get_dtb_randomness(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2481,6 +2544,7 @@ static void virt_set_dtb_randomness(Object *obj, bool value, Error **errp)
 
     vms->dtb_randomness = value;
 }
+#endif /* disabled for RHEL */
 
 static char *virt_get_oem_id(Object *obj, Error **errp)
 {
@@ -2564,6 +2628,7 @@ static void virt_set_ras(Object *obj, bool value, Error **errp)
     vms->ras = value;
 }
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static bool virt_get_mte(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
@@ -2577,6 +2642,7 @@ static void virt_set_mte(Object *obj, bool value, Error **errp)
 
     vms->mte = value;
 }
+#endif /* disabled for RHEL */
 
 static char *virt_get_gic_version(Object *obj, Error **errp)
 {
@@ -2949,11 +3015,13 @@ static int virt_kvm_type(MachineState *ms, const char *type_str)
     return fixed_ipa ? 0 : requested_pa_size;
 }
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static void virt_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
     HotplugHandlerClass *hc = HOTPLUG_HANDLER_CLASS(oc);
     static const char * const valid_cpu_types[] = {
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 #ifdef CONFIG_TCG
         ARM_CPU_TYPE_NAME("cortex-a7"),
         ARM_CPU_TYPE_NAME("cortex-a15"),
@@ -2971,6 +3039,7 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
 #endif /* CONFIG_TCG */
 #ifdef TARGET_AARCH64
         ARM_CPU_TYPE_NAME("cortex-a53"),
+#endif /* disabled for RHEL */
         ARM_CPU_TYPE_NAME("cortex-a57"),
 #if defined(CONFIG_KVM) || defined(CONFIG_HVF)
         ARM_CPU_TYPE_NAME("host"),
@@ -3461,3 +3530,235 @@ static void virt_machine_2_6_options(MachineClass *mc)
     vmc->no_pmu = true;
 }
 DEFINE_VIRT_MACHINE(2, 6)
+#endif /* disabled for RHEL */
+
+static void rhel_machine_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+    HotplugHandlerClass *hc = HOTPLUG_HANDLER_CLASS(oc);
+
+    mc->family = "virt-rhel-Z";
+    mc->init = machvirt_init;
+    /* Maximum supported VCPU count for all virt-rhel* machines */
+    mc->max_cpus = 384;
+#ifdef CONFIG_TPM
+    machine_class_allow_dynamic_sysbus_dev(mc, TYPE_TPM_TIS_SYSBUS);
+#endif
+    mc->block_default_type = IF_VIRTIO;
+    mc->no_cdrom = 1;
+    mc->pci_allow_0_address = true;
+    /* We know we will never create a pre-ARMv7 CPU which needs 1K pages */
+    mc->minimum_page_bits = 12;
+    mc->possible_cpu_arch_ids = virt_possible_cpu_arch_ids;
+    mc->cpu_index_to_instance_props = virt_cpu_index_to_props;
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a57");
+    mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
+    mc->kvm_type = virt_kvm_type;
+    assert(!mc->get_hotplug_handler);
+    mc->get_hotplug_handler = virt_machine_get_hotplug_handler;
+    hc->pre_plug = virt_machine_device_pre_plug_cb;
+    hc->plug = virt_machine_device_plug_cb;
+    hc->unplug_request = virt_machine_device_unplug_request_cb;
+    hc->unplug = virt_machine_device_unplug_cb;
+    mc->nvdimm_supported = true;
+    mc->smp_props.clusters_supported = true;
+    mc->auto_enable_numa_with_memhp = true;
+    mc->auto_enable_numa_with_memdev = true;
+    /* platform instead of architectural choice */
+    mc->cpu_cluster_has_numa_boundary = true;
+    mc->default_ram_id = "mach-virt.ram";
+    mc->default_nic = "virtio-net-pci";
+
+    object_class_property_add(oc, "acpi", "OnOffAuto",
+        virt_get_acpi, virt_set_acpi,
+        NULL, NULL);
+    object_class_property_set_description(oc, "acpi",
+        "Enable ACPI");
+
+    object_class_property_add_bool(oc, "highmem", virt_get_highmem,
+                                   virt_set_highmem);
+    object_class_property_set_description(oc, "highmem",
+                                          "Set on/off to enable/disable using "
+                                          "physical address space above 32 bits");
+
+    object_class_property_add_bool(oc, "highmem-redists",
+                                   virt_get_highmem_redists,
+                                   virt_set_highmem_redists);
+    object_class_property_set_description(oc, "highmem-redists",
+                                          "Set on/off to enable/disable high "
+                                          "memory region for GICv3 or GICv4 "
+                                          "redistributor");
+
+    object_class_property_add_bool(oc, "highmem-ecam",
+                                   virt_get_highmem_ecam,
+                                   virt_set_highmem_ecam);
+    object_class_property_set_description(oc, "highmem-ecam",
+                                          "Set on/off to enable/disable high "
+                                          "memory region for PCI ECAM");
+
+    object_class_property_add_bool(oc, "highmem-mmio",
+                                   virt_get_highmem_mmio,
+                                   virt_set_highmem_mmio);
+    object_class_property_set_description(oc, "highmem-mmio",
+                                          "Set on/off to enable/disable high "
+                                          "memory region for PCI MMIO");
+
+    object_class_property_add_str(oc, "gic-version", virt_get_gic_version,
+                                  virt_set_gic_version);
+    object_class_property_set_description(oc, "gic-version",
+                                          "Set GIC version. "
+                                          "Valid values are 2, 3, host and max");
+
+    object_class_property_add_str(oc, "iommu", virt_get_iommu, virt_set_iommu);
+    object_class_property_set_description(oc, "iommu",
+                                          "Set the IOMMU type. "
+                                          "Valid values are none and smmuv3");
+
+    object_class_property_add_bool(oc, "default-bus-bypass-iommu",
+                                   virt_get_default_bus_bypass_iommu,
+                                   virt_set_default_bus_bypass_iommu);
+    object_class_property_set_description(oc, "default-bus-bypass-iommu",
+                                          "Set on/off to enable/disable "
+                                          "bypass_iommu for default root bus");
+
+    object_class_property_add_bool(oc, "ras", virt_get_ras,
+                                   virt_set_ras);
+    object_class_property_set_description(oc, "ras",
+                                          "Set on/off to enable/disable reporting host memory errors "
+                                          "to a KVM guest using ACPI and guest external abort exceptions");
+
+    object_class_property_add_bool(oc, "its", virt_get_its,
+                                   virt_set_its);
+    object_class_property_set_description(oc, "its",
+                                          "Set on/off to enable/disable "
+                                          "ITS instantiation");
+
+    object_class_property_add_str(oc, "x-oem-id",
+                                  virt_get_oem_id,
+                                  virt_set_oem_id);
+    object_class_property_set_description(oc, "x-oem-id",
+                                          "Override the default value of field OEMID "
+                                          "in ACPI table header."
+                                          "The string may be up to 6 bytes in size");
+
+
+    object_class_property_add_str(oc, "x-oem-table-id",
+                                  virt_get_oem_table_id,
+                                  virt_set_oem_table_id);
+    object_class_property_set_description(oc, "x-oem-table-id",
+                                          "Override the default value of field OEM Table ID "
+                                          "in ACPI table header."
+                                          "The string may be up to 8 bytes in size");
+}
+
+static void rhel_virt_instance_init(Object *obj)
+{
+    VirtMachineState *vms = VIRT_MACHINE(obj);
+    VirtMachineClass *vmc = VIRT_MACHINE_GET_CLASS(vms);
+
+    /* EL3 is disabled by default and non-configurable for RHEL */
+    vms->secure = false;
+
+    /* EL2 is disabled by default and non-configurable for RHEL */
+    vms->virt = false;
+
+    /* High memory is enabled by default */
+    vms->highmem = true;
+    vms->highmem_compact = !vmc->no_highmem_compact;
+    vms->gic_version = VIRT_GIC_VERSION_NOSEL;
+
+    vms->highmem_ecam = !vmc->no_highmem_ecam;
+    vms->highmem_mmio = true;
+    vms->highmem_redists = true;
+
+    if (vmc->no_its) {
+        vms->its = false;
+    } else {
+        /* Default allows ITS instantiation */
+        vms->its = true;
+
+        if (vmc->no_tcg_its) {
+            vms->tcg_its = false;
+        } else {
+            vms->tcg_its = true;
+        }
+    }
+
+    /* Default disallows iommu instantiation */
+    vms->iommu = VIRT_IOMMU_NONE;
+
+    /* The default root bus is attached to iommu by default */
+    vms->default_bus_bypass_iommu = false;
+
+    /* Default disallows RAS instantiation and is non-configurable for RHEL */
+    vms->ras = false;
+
+    /* MTE is disabled by default and non-configurable for RHEL */
+    vms->mte = false;
+
+    /* Supply kaslr-seed and rng-seed by default, non-configurable for RHEL */
+    vms->dtb_randomness = true;
+
+    vms->irqmap = a15irqmap;
+
+    virt_flash_create(vms);
+
+    vms->oem_id = g_strndup(ACPI_BUILD_APPNAME6, 6);
+    vms->oem_table_id = g_strndup(ACPI_BUILD_APPNAME8, 8);
+}
+
+static const TypeInfo rhel_machine_info = {
+    .name          = TYPE_RHEL_MACHINE,
+    .parent        = TYPE_MACHINE,
+    .abstract      = true,
+    .instance_size = sizeof(VirtMachineState),
+    .class_size    = sizeof(VirtMachineClass),
+    .class_init    = rhel_machine_class_init,
+    .instance_init = rhel_virt_instance_init,
+    .interfaces = (InterfaceInfo[]) {
+         { TYPE_HOTPLUG_HANDLER },
+         { }
+    },
+};
+
+static void rhel_machine_init(void)
+{
+    type_register_static(&rhel_machine_info);
+}
+type_init(rhel_machine_init);
+
+static void rhel940_virt_options(MachineClass *mc)
+{
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_5, hw_compat_rhel_9_5_len);
+}
+DEFINE_RHEL_MACHINE_AS_LATEST(9, 4, 0)
+
+static void rhel920_virt_options(MachineClass *mc)
+{
+    rhel940_virt_options(mc);
+
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_4, hw_compat_rhel_9_4_len);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_3, hw_compat_rhel_9_3_len);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_2, hw_compat_rhel_9_2_len);
+
+    /* RHEL 9.4 is the first supported release */
+    mc->deprecation_reason =
+        "machine types for versions prior to 9.4 are deprecated";
+}
+DEFINE_RHEL_MACHINE(9, 2, 0)
+
+static void rhel900_virt_options(MachineClass *mc)
+{
+    VirtMachineClass *vmc = VIRT_MACHINE_CLASS(OBJECT_CLASS(mc));
+
+    rhel920_virt_options(mc);
+
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_1, hw_compat_rhel_9_1_len);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_0, hw_compat_rhel_9_0_len);
+
+    /* Disable FEAT_LPA2 since old kernels (<= v5.12) don't boot with that feature */
+    vmc->no_tcg_lpa2 = true;
+    /* Compact layout for high memory regions was introduced with 9.2.0 */
+    vmc->no_highmem_compact = true;
+}
+DEFINE_RHEL_MACHINE(9, 0, 0)

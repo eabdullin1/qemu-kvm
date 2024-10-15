@@ -2565,6 +2565,7 @@ void kvm_s390_apply_cpu_model(const S390CPUModel *model, Error **errp)
         error_setg(errp, "KVM doesn't support CPU models");
         return;
     }
+
     prop.cpuid = s390_cpuid_from_cpu_model(model);
     prop.ibc = s390_ibc_from_cpu_model(model);
     /* configure cpu features indicated via STFL(e) */

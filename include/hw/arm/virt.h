@@ -179,8 +179,16 @@ struct VirtMachineState {
 
 #define VIRT_ECAM_ID(high) (high ? VIRT_HIGH_PCIE_ECAM : VIRT_PCIE_ECAM)
 
+#if 0 /* disabled for Red Hat Enterprise Linux */
 #define TYPE_VIRT_MACHINE   MACHINE_TYPE_NAME("virt")
 OBJECT_DECLARE_TYPE(VirtMachineState, VirtMachineClass, VIRT_MACHINE)
+
+#else
+#define TYPE_RHEL_MACHINE MACHINE_TYPE_NAME("virt-rhel")
+typedef struct VirtMachineClass VirtMachineClass;
+typedef struct VirtMachineState VirtMachineState;
+DECLARE_OBJ_CHECKERS(VirtMachineState, VirtMachineClass, VIRT_MACHINE, TYPE_RHEL_MACHINE)
+#endif
 
 void virt_acpi_setup(VirtMachineState *vms);
 bool virt_is_acpi_enabled(VirtMachineState *vms);
