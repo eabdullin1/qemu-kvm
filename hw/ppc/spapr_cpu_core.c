@@ -25,6 +25,7 @@
 #include "sysemu/reset.h"
 #include "sysemu/hw_accel.h"
 #include "qemu/error-report.h"
+#include "cpu-models.h"
 
 static void spapr_reset_vcpu(PowerPCCPU *cpu)
 {
@@ -264,6 +265,7 @@ static bool spapr_realize_vcpu(PowerPCCPU *cpu, SpaprMachineState *spapr,
 {
     CPUPPCState *env = &cpu->env;
     CPUState *cs = CPU(cpu);
+    SpaprMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
 
     if (!qdev_realize(DEVICE(cpu), NULL, errp)) {
         return false;
@@ -279,6 +281,18 @@ static bool spapr_realize_vcpu(PowerPCCPU *cpu, SpaprMachineState *spapr,
 
     /* Set time-base frequency to 512 MHz. vhyp must be set first. */
     cpu_ppc_tb_init(env, SPAPR_TIMEBASE_FREQ);
+
+    if (!smc->has_power9_support &&
+        (((spapr->max_compat_pvr &&
+           ppc_compat_cmp(spapr->max_compat_pvr,
+                          CPU_POWERPC_LOGICAL_3_00) >= 0)) ||
+          (!spapr->max_compat_pvr &&
+           ppc_check_compat(cpu, CPU_POWERPC_LOGICAL_3_00, 0, 0)))) {
+        error_set(errp, ERROR_CLASS_DEVICE_NOT_FOUND,
+                  "POWER9 CPU is not supported by this machine class");
+        return false;
+    }
+
 
     if (spapr_irq_cpu_intc_create(spapr, cpu, errp) < 0) {
         qdev_unrealize(DEVICE(cpu));
@@ -399,10 +413,12 @@ static const TypeInfo spapr_cpu_core_type_infos[] = {
         .instance_size = sizeof(SpaprCpuCore),
         .class_size = sizeof(SpaprCpuCoreClass),
     },
+#if 0  /* Disabled for Red Hat Enterprise Linux */
     DEFINE_SPAPR_CPU_CORE_TYPE("970_v2.2"),
     DEFINE_SPAPR_CPU_CORE_TYPE("970mp_v1.0"),
     DEFINE_SPAPR_CPU_CORE_TYPE("970mp_v1.1"),
     DEFINE_SPAPR_CPU_CORE_TYPE("power5p_v2.1"),
+#endif
     DEFINE_SPAPR_CPU_CORE_TYPE("power7_v2.3"),
     DEFINE_SPAPR_CPU_CORE_TYPE("power7p_v2.1"),
     DEFINE_SPAPR_CPU_CORE_TYPE("power8_v2.0"),

@@ -1746,6 +1746,13 @@ static void spapr_machine_reset(MachineState *machine, ShutdownCause reason)
     }
     spapr_caps_apply(spapr);
     spapr_nested_reset(spapr);
+    if (spapr->svm_allowed) {
+#ifdef CONFIG_KVM
+        kvmppc_svm_allow(&error_fatal);
+#else
+        error_setg(&error_fatal, "No PEF support in tcg, try x-svm-allowed=off");
+#endif
+    }
 
     first_ppc_cpu = POWERPC_CPU(first_cpu);
     if (kvm_enabled() && kvmppc_has_cap_mmu_radix() &&
@@ -3452,6 +3459,20 @@ static void spapr_set_host_serial(Object *obj, const char *value, Error **errp)
     spapr->host_serial = g_strdup(value);
 }
 
+static bool spapr_get_svm_allowed(Object *obj, Error **errp)
+{
+    SpaprMachineState *spapr = SPAPR_MACHINE(obj);
+
+    return spapr->svm_allowed;
+}
+
+static void spapr_set_svm_allowed(Object *obj, bool value, Error **errp)
+{
+    SpaprMachineState *spapr = SPAPR_MACHINE(obj);
+
+    spapr->svm_allowed = value;
+}
+
 static void spapr_instance_init(Object *obj)
 {
     SpaprMachineState *spapr = SPAPR_MACHINE(obj);
@@ -3530,6 +3551,12 @@ static void spapr_instance_init(Object *obj)
         spapr_get_host_serial, spapr_set_host_serial);
     object_property_set_description(obj, "host-serial",
         "Host serial number to advertise in guest device tree");
+    object_property_add_bool(obj, "x-svm-allowed",
+                            spapr_get_svm_allowed,
+                            spapr_set_svm_allowed);
+    object_property_set_description(obj, "x-svm-allowed",
+                                    "Allow the guest to become a Secure Guest"
+                                    " (experimental only)");
 }
 
 static void spapr_machine_finalizefn(Object *obj)
@@ -4775,6 +4802,7 @@ static void spapr_machine_class_init(ObjectClass *oc, void *data)
     vmc->client_architecture_support = spapr_vof_client_architecture_support;
     vmc->quiesce = spapr_vof_quiesce;
     vmc->setprop = spapr_vof_setprop;
+    smc->has_power9_support = true;
 }
 
 static const TypeInfo spapr_machine_info = {
@@ -4830,13 +4858,14 @@ static void spapr_machine_latest_class_options(MachineClass *mc)
     }                                                                \
     type_init(MACHINE_VER_SYM(register, spapr, __VA_ARGS__))
 
-#define DEFINE_SPAPR_MACHINE_AS_LATEST(major, minor) \
-    DEFINE_SPAPR_MACHINE_IMPL(true, major, minor)
-#define DEFINE_SPAPR_MACHINE(major, minor) \
-    DEFINE_SPAPR_MACHINE_IMPL(false, major, minor)
-#define DEFINE_SPAPR_MACHINE_TAGGED(major, minor, tag) \
-    DEFINE_SPAPR_MACHINE_IMPL(false, major, minor, _, tag)
+#define DEFINE_SPAPR_MACHINE_AS_LATEST(major, minor, micro) \
+    DEFINE_SPAPR_MACHINE_IMPL(true, major, minor, micro)
+#define DEFINE_SPAPR_MACHINE(major, minor, micro) \
+    DEFINE_SPAPR_MACHINE_IMPL(false, major, minor, micro)
+#define DEFINE_SPAPR_MACHINE_TAGGED(major, minor, micro, tag) \
+    DEFINE_SPAPR_MACHINE_IMPL(false, major, minor, micro, _, tag)
 
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 /*
  * pseries-9.1
  */
@@ -5056,6 +5085,9 @@ static bool phb_placement_4_0(SpaprMachineState *spapr, uint32_t index,
     }
     return true;
 }
+#endif
+
+#if 0 /* Disabled for Red Hat Enterprise Linux */
 static void spapr_machine_4_0_class_options(MachineClass *mc)
 {
     SpaprMachineClass *smc = SPAPR_MACHINE_CLASS(mc);
@@ -5380,6 +5412,87 @@ static void spapr_machine_2_1_class_options(MachineClass *mc)
     compat_props_add(mc->compat_props, hw_compat_2_1, hw_compat_2_1_len);
 }
 DEFINE_SPAPR_MACHINE(2, 1);
+#endif /* disabled for RHEL */
+
+static void spapr_rhel_machine_default_class_options(MachineClass *mc)
+{
+    /*
+     * Defaults for the latest behaviour inherited from the base class
+     * can be overriden here for all pseries-rhel* machines.
+     */
+
+    /* Maximum supported VCPU count */
+    mc->max_cpus = 384;
+}
+
+static void spapr_rhel_machine_10_0_0_class_options(MachineClass *mc)
+{
+    SpaprMachineClass *smc = SPAPR_MACHINE_CLASS(mc);
+
+    /* The default machine type must apply the RHEL specific defaults */
+    spapr_rhel_machine_default_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_10_0,
+                     hw_compat_rhel_10_0_len);
+    smc->pre_6_2_numa_affinity = true;
+    mc->smp_props.prefer_sockets = true;
+}
+
+DEFINE_SPAPR_MACHINE_AS_LATEST(10, 0, 0);
+
+static void spapr_rhel_machine_9_5_0_class_options(MachineClass *mc)
+{
+    spapr_rhel_machine_10_0_0_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_5,
+                     hw_compat_rhel_9_5_len);
+}
+
+DEFINE_SPAPR_MACHINE(9, 5, 0);
+
+static void spapr_rhel_machine_9_4_0_class_options(MachineClass *mc)
+{
+    spapr_rhel_machine_9_5_0_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_4,
+                     hw_compat_rhel_9_4_len);
+}
+
+DEFINE_SPAPR_MACHINE(9, 4, 0);
+
+static void spapr_rhel_machine_9_3_0_class_options(MachineClass *mc)
+{
+    spapr_rhel_machine_9_4_0_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_3,
+                     hw_compat_rhel_9_3_len);
+}
+
+DEFINE_SPAPR_MACHINE(9, 3, 0);
+
+static void spapr_rhel_machine_9_2_0_class_options(MachineClass *mc)
+{
+    spapr_rhel_machine_9_3_0_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_2,
+                     hw_compat_rhel_9_2_len);
+}
+
+DEFINE_SPAPR_MACHINE(9, 2, 0);
+
+static void spapr_rhel_machine_9_1_0_class_options(MachineClass *mc)
+{
+    spapr_rhel_machine_9_2_0_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_1,
+                     hw_compat_rhel_9_1_len);
+}
+
+DEFINE_SPAPR_MACHINE(9, 1, 0);
+
+static void spapr_rhel_machine_9_0_0_class_options(MachineClass *mc)
+{
+    spapr_rhel_machine_9_1_0_class_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_rhel_9_0,
+                     hw_compat_rhel_9_0_len);
+}
+
+DEFINE_SPAPR_MACHINE(9, 0, 0);
+
 
 static void spapr_machine_register_types(void)
 {
