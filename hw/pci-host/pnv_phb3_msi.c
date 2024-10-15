@@ -13,6 +13,7 @@
 #include "hw/pci-host/pnv_phb3.h"
 #include "hw/ppc/pnv.h"
 #include "hw/pci/msi.h"
+#include "monitor/monitor.h"
 #include "hw/irq.h"
 #include "hw/qdev-properties.h"
 #include "sysemu/reset.h"
@@ -227,13 +228,13 @@ static void phb3_msi_resend(ICSState *ics)
     }
 }
 
-static void phb3_msi_reset_hold(Object *obj, ResetType type)
+static void phb3_msi_reset_hold(Object *obj)
 {
     Phb3MsiState *msi = PHB3_MSI(obj);
     ICSStateClass *icsc = ICS_GET_CLASS(obj);
 
     if (icsc->parent_phases.hold) {
-        icsc->parent_phases.hold(obj, type);
+        icsc->parent_phases.hold(obj);
     }
 
     memset(msi->rba, 0, sizeof(msi->rba));
@@ -315,13 +316,13 @@ static void pnv_phb3_msi_register_types(void)
 
 type_init(pnv_phb3_msi_register_types);
 
-void pnv_phb3_msi_pic_print_info(Phb3MsiState *msi, GString *buf)
+void pnv_phb3_msi_pic_print_info(Phb3MsiState *msi, Monitor *mon)
 {
     ICSState *ics = ICS(msi);
     int i;
 
-    g_string_append_printf(buf, "ICS %4x..%4x %p\n",
-                           ics->offset, ics->offset + ics->nr_irqs - 1, ics);
+    monitor_printf(mon, "ICS %4x..%4x %p\n",
+                   ics->offset, ics->offset + ics->nr_irqs - 1, ics);
 
     for (i = 0; i < ics->nr_irqs; i++) {
         uint64_t ive;
@@ -334,12 +335,12 @@ void pnv_phb3_msi_pic_print_info(Phb3MsiState *msi, GString *buf)
             continue;
         }
 
-        g_string_append_printf(buf, "  %4x %c%c server=%04x prio=%02x gen=%d\n",
-                               ics->offset + i,
-                               GETFIELD(IODA2_IVT_P, ive) ? 'P' : '-',
-                               GETFIELD(IODA2_IVT_Q, ive) ? 'Q' : '-',
-                               (uint32_t) GETFIELD(IODA2_IVT_SERVER, ive) >> 2,
-                               (uint32_t) GETFIELD(IODA2_IVT_PRIORITY, ive),
-                               (uint32_t) GETFIELD(IODA2_IVT_GEN, ive));
+        monitor_printf(mon, "  %4x %c%c server=%04x prio=%02x gen=%d\n",
+                       ics->offset + i,
+                       GETFIELD(IODA2_IVT_P, ive) ? 'P' : '-',
+                       GETFIELD(IODA2_IVT_Q, ive) ? 'Q' : '-',
+                       (uint32_t) GETFIELD(IODA2_IVT_SERVER, ive) >> 2,
+                       (uint32_t) GETFIELD(IODA2_IVT_PRIORITY, ive),
+                       (uint32_t) GETFIELD(IODA2_IVT_GEN, ive));
     }
 }

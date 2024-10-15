@@ -24,6 +24,8 @@
 #include "exec/cpu-defs.h"
 #include "fpu/softfloat-types.h"
 
+#define TCG_GUEST_DEFAULT_MO (0)
+
 /**
  * OpenRISCCPUClass:
  * @parent_realize: The parent class' realize handler.

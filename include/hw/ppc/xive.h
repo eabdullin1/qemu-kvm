@@ -314,7 +314,7 @@ static inline bool xive_source_is_asserted(XiveSource *xsrc, uint32_t srcno)
 }
 
 void xive_source_pic_print_info(XiveSource *xsrc, uint32_t offset,
-                                GString *buf);
+                                Monitor *mon);
 
 static inline bool xive_source_irq_is_lsi(XiveSource *xsrc, uint32_t srcno)
 {
@@ -528,7 +528,7 @@ void xive_tctx_tm_write(XivePresenter *xptr, XiveTCTX *tctx, hwaddr offset,
 uint64_t xive_tctx_tm_read(XivePresenter *xptr, XiveTCTX *tctx, hwaddr offset,
                            unsigned size);
 
-void xive_tctx_pic_print_info(XiveTCTX *tctx, GString *buf);
+void xive_tctx_pic_print_info(XiveTCTX *tctx, Monitor *mon);
 Object *xive_tctx_create(Object *cpu, XivePresenter *xptr, Error **errp);
 void xive_tctx_reset(XiveTCTX *tctx);
 void xive_tctx_destroy(XiveTCTX *tctx);

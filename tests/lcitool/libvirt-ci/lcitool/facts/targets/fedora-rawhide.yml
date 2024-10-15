@@ -2,7 +2,6 @@
 os:
   name: 'Fedora'
   version: 'Rawhide'
-  stable: false
   libosinfo_id: 'http://fedoraproject.org/fedora/rawhide'
 
 packaging:

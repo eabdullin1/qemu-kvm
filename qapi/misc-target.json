@@ -11,7 +11,7 @@
 #
 # Since: 2.1
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "rtc-reset-reinjection" }
 #     <- { "return": {} }
@@ -48,50 +48,6 @@
   'if': 'TARGET_I386' }
 
 ##
-# @SevGuestType:
-#
-# An enumeration indicating the type of SEV guest being run.
-#
-# @sev: The guest is a legacy SEV or SEV-ES guest.
-#
-# @sev-snp: The guest is an SEV-SNP guest.
-#
-# Since: 6.2
-##
-{ 'enum': 'SevGuestType',
-  'data': [ 'sev', 'sev-snp' ],
-  'if': 'TARGET_I386' }
-
-##
-# @SevGuestInfo:
-#
-# Information specific to legacy SEV/SEV-ES guests.
-#
-# @policy: SEV policy value
-#
-# @handle: SEV firmware handle
-#
-# Since: 2.12
-##
-{ 'struct': 'SevGuestInfo',
-  'data': { 'policy': 'uint32',
-            'handle': 'uint32' },
-  'if': 'TARGET_I386' }
-
-##
-# @SevSnpGuestInfo:
-#
-# Information specific to SEV-SNP guests.
-#
-# @snp-policy: SEV-SNP policy value
-#
-# Since: 9.1
-##
-{ 'struct': 'SevSnpGuestInfo',
-  'data': { 'snp-policy': 'uint64' },
-  'if': 'TARGET_I386' }
-
-##
 # @SevInfo:
 #
 # Information about Secure Encrypted Virtualization (SEV) support
@@ -104,25 +60,25 @@
 #
 # @build-id: SEV FW build id
 #
+# @policy: SEV policy value
+#
 # @state: SEV guest state
 #
-# @sev-type: Type of SEV guest being run
+# @handle: SEV firmware handle
 #
 # Since: 2.12
 ##
-{ 'union': 'SevInfo',
-  'base': { 'enabled': 'bool',
-            'api-major': 'uint8',
-            'api-minor' : 'uint8',
-            'build-id' : 'uint8',
-            'state' : 'SevState',
-            'sev-type' : 'SevGuestType' },
-  'discriminator': 'sev-type',
-  'data': {
-      'sev': 'SevGuestInfo',
-      'sev-snp': 'SevSnpGuestInfo' },
-  'if': 'TARGET_I386' }
-
+{ 'struct': 'SevInfo',
+    'data': { 'enabled': 'bool',
+              'api-major': 'uint8',
+              'api-minor' : 'uint8',
+              'build-id' : 'uint8',
+              'policy' : 'uint32',
+              'state' : 'SevState',
+              'handle' : 'uint32'
+            },
+  'if': 'TARGET_I386'
+}
 
 ##
 # @query-sev:
@@ -133,7 +89,7 @@
 #
 # Since: 2.12
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-sev" }
 #     <- { "return": { "enabled": true, "api-major" : 0, "api-minor" : 0,
@@ -164,7 +120,7 @@
 #
 # Since: 2.12
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-sev-launch-measure" }
 #     <- { "return": { "data": "4l8LXeNlSPUDlXPJG5966/8%YZ" } }
@@ -209,7 +165,7 @@
 #
 # Since: 2.12
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-sev-capabilities" }
 #     <- { "return": { "pdh": "8CCDD8DDD", "cert-chain": "888CCCDDDEE",
@@ -263,7 +219,7 @@
 #
 # Since: 6.1
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute" : "query-sev-attestation-report",
 #                      "arguments": { "mnonce": "aaaaaaa" } }
@@ -283,7 +239,7 @@
 #
 # Since: 2.5
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "dump-skeys",
 #          "arguments": { "filename": "/tmp/skeys" } }
@@ -328,7 +284,7 @@
 #
 # Since: 2.6
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-gic-capabilities" }
 #     <- { "return": [{ "version": 2, "emulated": true, "kernel": false },
@@ -386,7 +342,7 @@
 #
 # Since: 6.2
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-sgx" }
 #     <- { "return": { "sgx": true, "sgx1" : true, "sgx2" : true,
@@ -405,7 +361,7 @@
 #
 # Since: 6.2
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-sgx-capabilities" }
 #     <- { "return": { "sgx": true, "sgx1" : true, "sgx2" : true,
@@ -480,7 +436,7 @@
 #
 # Since: 8.0
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "xen-event-list" }
 #     <- { "return": [
@@ -518,7 +474,7 @@
 #
 # Since: 8.0
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "xen-event-inject", "arguments": { "port": 1 } }
 #     <- { "return": { } }

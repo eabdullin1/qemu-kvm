@@ -10,8 +10,7 @@
 
 import os
 
-from avocado_qemu.linuxtest import LinuxTest
-from avocado_qemu import BUILD_DIR
+from avocado_qemu import LinuxTest, BUILD_DIR
 
 from avocado import skipUnless
 

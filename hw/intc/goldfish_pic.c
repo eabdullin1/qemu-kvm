@@ -12,6 +12,7 @@
 #include "hw/qdev-properties.h"
 #include "hw/sysbus.h"
 #include "migration/vmstate.h"
+#include "monitor/monitor.h"
 #include "qemu/log.h"
 #include "trace.h"
 #include "hw/intc/intc.h"
@@ -38,12 +39,11 @@ static bool goldfish_pic_get_statistics(InterruptStatsProvider *obj,
     return true;
 }
 
-static void goldfish_pic_print_info(InterruptStatsProvider *obj, GString *buf)
+static void goldfish_pic_print_info(InterruptStatsProvider *obj, Monitor *mon)
 {
     GoldfishPICState *s = GOLDFISH_PIC(obj);
-    g_string_append_printf(buf,
-                           "goldfish-pic.%d: pending=0x%08x enabled=0x%08x\n",
-                           s->idx, s->pending, s->enabled);
+    monitor_printf(mon, "goldfish-pic.%d: pending=0x%08x enabled=0x%08x\n",
+                   s->idx, s->pending, s->enabled);
 }
 
 static void goldfish_pic_update(GoldfishPICState *s)

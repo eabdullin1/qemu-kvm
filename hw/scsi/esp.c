@@ -197,9 +197,39 @@ static uint8_t esp_fifo_pop(ESPState *s)
     return val;
 }
 
+static uint32_t esp_fifo8_pop_buf(Fifo8 *fifo, uint8_t *dest, int maxlen)
+{
+    const uint8_t *buf;
+    uint32_t n, n2;
+    int len;
+
+    if (maxlen == 0) {
+        return 0;
+    }
+
+    len = maxlen;
+    buf = fifo8_pop_buf(fifo, len, &n);
+    if (dest) {
+        memcpy(dest, buf, n);
+    }
+
+    /* Add FIFO wraparound if needed */
+    len -= n;
+    len = MIN(len, fifo8_num_used(fifo));
+    if (len) {
+        buf = fifo8_pop_buf(fifo, len, &n2);
+        if (dest) {
+            memcpy(&dest[n], buf, n2);
+        }
+        n += n2;
+    }
+
+    return n;
+}
+
 static uint32_t esp_fifo_pop_buf(ESPState *s, uint8_t *dest, int maxlen)
 {
-    uint32_t len = fifo8_pop_buf(&s->fifo, dest, maxlen);
+    uint32_t len = esp_fifo8_pop_buf(&s->fifo, dest, maxlen);
 
     esp_update_drq(s);
     return len;
@@ -305,7 +335,7 @@ static void do_command_phase(ESPState *s)
     if (!cmdlen || !s->current_dev) {
         return;
     }
-    fifo8_pop_buf(&s->cmdfifo, buf, cmdlen);
+    esp_fifo8_pop_buf(&s->cmdfifo, buf, cmdlen);
 
     current_lun = scsi_device_find(&s->bus, 0, s->current_dev->id, s->lun);
     if (!current_lun) {
@@ -351,7 +381,7 @@ static void do_message_phase(ESPState *s)
     /* Ignore extended messages for now */
     if (s->cmdfifo_cdb_offset) {
         int len = MIN(s->cmdfifo_cdb_offset, fifo8_num_used(&s->cmdfifo));
-        fifo8_drop(&s->cmdfifo, len);
+        esp_fifo8_pop_buf(&s->cmdfifo, NULL, len);
         s->cmdfifo_cdb_offset = 0;
     }
 }
@@ -456,7 +486,7 @@ static bool esp_cdb_ready(ESPState *s)
         return false;
     }
 
-    pbuf = fifo8_peek_bufptr(&s->cmdfifo, len, &n);
+    pbuf = fifo8_peek_buf(&s->cmdfifo, len, &n);
     if (n < len) {
         /*
          * In normal use the cmdfifo should never wrap, but include this check
@@ -564,7 +594,7 @@ static void esp_do_dma(ESPState *s)
         if (!s->current_req) {
             return;
         }
-        if (s->async_len == 0 && esp_get_tc(s)) {
+        if (s->async_len == 0 && esp_get_tc(s) && s->ti_size) {
             /* Defer until data is available.  */
             return;
         }
@@ -617,7 +647,7 @@ static void esp_do_dma(ESPState *s)
         if (!s->current_req) {
             return;
         }
-        if (s->async_len == 0 && esp_get_tc(s)) {
+        if (s->async_len == 0 && esp_get_tc(s) && s->ti_size) {
             /* Defer until data is available.  */
             return;
         }

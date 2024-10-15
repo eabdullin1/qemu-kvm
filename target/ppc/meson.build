@@ -37,7 +37,6 @@ ppc_system_ss.add(files(
   'arch_dump.c',
   'machine.c',
   'mmu-hash32.c',
-  'mmu-booke.c',
   'mmu_common.c',
   'ppc-qmp-cmds.c',
 ))

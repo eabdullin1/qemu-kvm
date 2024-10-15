@@ -51,7 +51,7 @@ def gen_param_var(typ: QAPISchemaObjectType) -> str:
 
     Initialize it with the function arguments defined in `gen_event_send`.
     """
-    assert not typ.branches
+    assert not typ.variants
     ret = mcgen('''
     %(c_name)s param = {
 ''',

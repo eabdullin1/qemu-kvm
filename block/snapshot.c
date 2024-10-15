@@ -28,6 +28,7 @@
 #include "block/qdict.h"
 #include "qapi/error.h"
 #include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qerror.h"
 #include "qapi/qmp/qstring.h"
 #include "qemu/option.h"
 #include "sysemu/block-backend.h"
@@ -358,8 +359,7 @@ int bdrv_snapshot_delete(BlockDriverState *bs,
     GLOBAL_STATE_CODE();
 
     if (!drv) {
-        error_setg(errp, "Device '%s' has no medium",
-                   bdrv_get_device_name(bs));
+        error_setg(errp, QERR_DEVICE_HAS_NO_MEDIUM, bdrv_get_device_name(bs));
         return -ENOMEDIUM;
     }
     if (!snapshot_id && !name) {
@@ -437,8 +437,7 @@ int bdrv_snapshot_load_tmp(BlockDriverState *bs,
     GRAPH_RDLOCK_GUARD_MAINLOOP();
 
     if (!drv) {
-        error_setg(errp, "Device '%s' has no medium",
-                   bdrv_get_device_name(bs));
+        error_setg(errp, QERR_DEVICE_HAS_NO_MEDIUM, bdrv_get_device_name(bs));
         return -ENOMEDIUM;
     }
     if (!snapshot_id && !name) {

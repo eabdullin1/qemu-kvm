@@ -271,59 +271,51 @@ void helper_stsw(CPUPPCState *env, target_ulong addr, uint32_t nb,
 }
 
 static void dcbz_common(CPUPPCState *env, target_ulong addr,
-                        int mmu_idx, int dcbz_size, uintptr_t retaddr)
+                        uint32_t opcode, bool epid, uintptr_t retaddr)
 {
-    target_ulong mask = ~(target_ulong)(dcbz_size - 1);
+    target_ulong mask, dcbz_size = env->dcache_line_size;
+    uint32_t i;
     void *haddr;
+    int mmu_idx = epid ? PPC_TLB_EPID_STORE : ppc_env_mmu_index(env, false);
+
+#if defined(TARGET_PPC64)
+    /* Check for dcbz vs dcbzl on 970 */
+    if (env->excp_model == POWERPC_EXCP_970 &&
+        !(opcode & 0x00200000) && ((env->spr[SPR_970_HID5] >> 7) & 0x3) == 1) {
+        dcbz_size = 32;
+    }
+#endif
 
     /* Align address */
+    mask = ~(dcbz_size - 1);
     addr &= mask;
 
     /* Check reservation */
-    if (unlikely((env->reserve_addr & mask) == addr))  {
+    if ((env->reserve_addr & mask) == addr)  {
         env->reserve_addr = (target_ulong)-1ULL;
     }
 
     /* Try fast path translate */
-#ifdef CONFIG_USER_ONLY
-    haddr = tlb_vaddr_to_host(env, addr, MMU_DATA_STORE, mmu_idx);
-#else
     haddr = probe_write(env, addr, dcbz_size, mmu_idx, retaddr);
-    if (unlikely(!haddr)) {
+    if (haddr) {
+        memset(haddr, 0, dcbz_size);
+    } else {
         /* Slow path */
-        for (int i = 0; i < dcbz_size; i += 8) {
+        for (i = 0; i < dcbz_size; i += 8) {
             cpu_stq_mmuidx_ra(env, addr + i, 0, mmu_idx, retaddr);
         }
-        return;
     }
-#endif
-
-    set_helper_retaddr(retaddr);
-    memset(haddr, 0, dcbz_size);
-    clear_helper_retaddr();
 }
 
-void helper_dcbz(CPUPPCState *env, target_ulong addr, int mmu_idx)
+void helper_dcbz(CPUPPCState *env, target_ulong addr, uint32_t opcode)
 {
-    dcbz_common(env, addr, mmu_idx, env->dcache_line_size, GETPC());
+    dcbz_common(env, addr, opcode, false, GETPC());
 }
 
-#ifdef TARGET_PPC64
-void helper_dcbzl(CPUPPCState *env, target_ulong addr)
+void helper_dcbzep(CPUPPCState *env, target_ulong addr, uint32_t opcode)
 {
-    int dcbz_size = env->dcache_line_size;
-
-    /*
-     * The translator checked for POWERPC_EXCP_970.
-     * All that's left is to check HID5.
-     */
-    if (((env->spr[SPR_970_HID5] >> 7) & 0x3) == 1) {
-        dcbz_size = 32;
-    }
-
-    dcbz_common(env, addr, ppc_env_mmu_index(env, false), dcbz_size, GETPC());
+    dcbz_common(env, addr, opcode, true, GETPC());
 }
-#endif
 
 void helper_icbi(CPUPPCState *env, target_ulong addr)
 {
@@ -412,9 +404,9 @@ target_ulong helper_lscbx(CPUPPCState *env, target_ulong addr, uint32_t reg,
         }                                                       \
     }
 #define I(x) (x)
-LVE(LVEBX, cpu_ldub_data_ra, I, u8)
-LVE(LVEHX, cpu_lduw_data_ra, bswap16, u16)
-LVE(LVEWX, cpu_ldl_data_ra, bswap32, u32)
+LVE(lvebx, cpu_ldub_data_ra, I, u8)
+LVE(lvehx, cpu_lduw_data_ra, bswap16, u16)
+LVE(lvewx, cpu_ldl_data_ra, bswap32, u32)
 #undef I
 #undef LVE
 
@@ -440,9 +432,9 @@ LVE(LVEWX, cpu_ldl_data_ra, bswap32, u32)
         }                                                               \
     }
 #define I(x) (x)
-STVE(STVEBX, cpu_stb_data_ra, I, u8)
-STVE(STVEHX, cpu_stw_data_ra, bswap16, u16)
-STVE(STVEWX, cpu_stl_data_ra, bswap32, u32)
+STVE(stvebx, cpu_stb_data_ra, I, u8)
+STVE(stvehx, cpu_stw_data_ra, bswap16, u16)
+STVE(stvewx, cpu_stl_data_ra, bswap32, u32)
 #undef I
 #undef LVE
 
@@ -475,8 +467,8 @@ void helper_##name(CPUPPCState *env, target_ulong addr,                 \
     *xt = t;                                                            \
 }
 
-VSX_LXVL(LXVL, 0)
-VSX_LXVL(LXVLL, 1)
+VSX_LXVL(lxvl, 0)
+VSX_LXVL(lxvll, 1)
 #undef VSX_LXVL
 
 #define VSX_STXVL(name, lj)                                       \
@@ -504,8 +496,8 @@ void helper_##name(CPUPPCState *env, target_ulong addr,           \
     }                                                             \
 }
 
-VSX_STXVL(STXVL, 0)
-VSX_STXVL(STXVLL, 1)
+VSX_STXVL(stxvl, 0)
+VSX_STXVL(stxvll, 1)
 #undef VSX_STXVL
 #undef GET_NB
 #endif /* TARGET_PPC64 */

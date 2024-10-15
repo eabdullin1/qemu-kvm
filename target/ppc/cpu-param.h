@@ -40,6 +40,4 @@
 # define TARGET_PAGE_BITS 12
 #endif
 
-#define TCG_GUEST_DEFAULT_MO 0
-
 #endif

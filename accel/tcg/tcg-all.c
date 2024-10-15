@@ -38,7 +38,7 @@
 #if !defined(CONFIG_USER_ONLY)
 #include "hw/boards.h"
 #endif
-#include "internal-common.h"
+#include "internal-target.h"
 
 struct TCGState {
     AccelState parent_obj;

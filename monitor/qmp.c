@@ -466,6 +466,7 @@ static void monitor_qmp_event(void *opaque, QEMUChrEvent event)
         data = qmp_greeting(mon);
         qmp_send_response(mon, data);
         qobject_unref(data);
+        mon_refcount++;
         break;
     case CHR_EVENT_CLOSED:
         /*
@@ -478,6 +479,7 @@ static void monitor_qmp_event(void *opaque, QEMUChrEvent event)
         json_message_parser_destroy(&mon->parser);
         json_message_parser_init(&mon->parser, handle_qmp_command,
                                  mon, NULL);
+        mon_refcount--;
         monitor_fdsets_cleanup();
         break;
     case CHR_EVENT_BREAK:

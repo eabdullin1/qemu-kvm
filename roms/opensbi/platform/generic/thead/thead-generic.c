@@ -33,33 +33,16 @@ static int thead_generic_early_init(bool cold_boot,
 static int thead_generic_extensions_init(const struct fdt_match *match,
 					 struct sbi_hart_features *hfeatures)
 {
-	struct thead_generic_quirks *quirks = (void *)match->data;
-
-	if (quirks->errata & THEAD_QUIRK_ERRATA_THEAD_PMU)
-		thead_c9xx_register_pmu_device();
-
+	thead_c9xx_register_pmu_device();
 	return 0;
 }
 
 static struct thead_generic_quirks thead_th1520_quirks = {
-	.errata = THEAD_QUIRK_ERRATA_TLB_FLUSH | THEAD_QUIRK_ERRATA_THEAD_PMU,
-};
-
-static struct thead_generic_quirks canaan_k230_quirks = {
-	.errata = THEAD_QUIRK_ERRATA_THEAD_PMU,
-};
-
-static struct thead_generic_quirks sophgo_cv1800_quirks = {
-	.errata = THEAD_QUIRK_ERRATA_THEAD_PMU,
+	.errata = THEAD_QUIRK_ERRATA_TLB_FLUSH,
 };
 
 static const struct fdt_match thead_generic_match[] = {
-	{ .compatible = "sophgo,cv1800b", .data = &sophgo_cv1800_quirks },
-	{ .compatible = "sophgo,cv1812h", .data = &sophgo_cv1800_quirks },
-	{ .compatible = "sophgo,sg2000", .data = &sophgo_cv1800_quirks },
-	{ .compatible = "sophgo,sg2002", .data = &sophgo_cv1800_quirks },
 	{ .compatible = "thead,th1520", .data = &thead_th1520_quirks },
-	{ .compatible = "canaan,kendryte-k230", .data = &canaan_k230_quirks },
 	{ },
 };
 

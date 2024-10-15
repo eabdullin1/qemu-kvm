@@ -484,7 +484,7 @@ static void pl061_enter_reset(Object *obj, ResetType type)
     s->amsel = 0;
 }
 
-static void pl061_hold_reset(Object *obj, ResetType type)
+static void pl061_hold_reset(Object *obj)
 {
     PL061State *s = PL061(obj);
     int i, level;

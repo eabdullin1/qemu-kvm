@@ -315,8 +315,7 @@ static void machine_set_cxl(Object *obj, Visitor *v, const char *name,
 static void machine_get_cfmw(Object *obj, Visitor *v, const char *name,
                              void *opaque, Error **errp)
 {
-    CXLState *state = opaque;
-    CXLFixedMemoryWindowOptionsList **list = &state->cfmw_list;
+    CXLFixedMemoryWindowOptionsList **list = opaque;
 
     visit_type_CXLFixedMemoryWindowOptionsList(v, name, list, errp);
 }

@@ -17,9 +17,7 @@ from lcitool.inventory import Inventory
 from lcitool.packages import Packages
 from lcitool.projects import Projects
 from lcitool.targets import Targets, BuildTarget
-from lcitool.formatters import DockerfileFormatter
-from lcitool.formatters import ShellVariablesFormatter, JSONVariablesFormatter, YamlVariablesFormatter
-from lcitool.formatters import ShellBuildEnvFormatter
+from lcitool.formatters import DockerfileFormatter, ShellVariablesFormatter, JSONVariablesFormatter, ShellBuildEnvFormatter
 from lcitool.manifest import Manifest
 from lcitool.containers import Docker, Podman, ContainerExecError
 
@@ -236,8 +234,6 @@ class Application:
 
         if args.format == "shell":
             formatter = ShellVariablesFormatter(projects)
-        elif args.format == "yaml":
-            formatter = YamlVariablesFormatter(projects)
         else:
             formatter = JSONVariablesFormatter(projects)
 

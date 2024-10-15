@@ -22,10 +22,8 @@
 
 #include "cpu.h"
 #if defined(CONFIG_USER_ONLY)
-#include "exec/abi_ptr.h"
 #include "exec/cpu_ldst.h"
 #endif
-#include "exec/mmu-access-type.h"
 #include "exec/translation-block.h"
 #include "qemu/clang-tsa.h"
 
@@ -68,15 +66,24 @@ void tlb_destroy(CPUState *cpu);
  */
 void tlb_flush_page(CPUState *cpu, vaddr addr);
 /**
+ * tlb_flush_page_all_cpus:
+ * @cpu: src CPU of the flush
+ * @addr: virtual address of page to be flushed
+ *
+ * Flush one page from the TLB of the specified CPU, for all
+ * MMU indexes.
+ */
+void tlb_flush_page_all_cpus(CPUState *src, vaddr addr);
+/**
  * tlb_flush_page_all_cpus_synced:
  * @cpu: src CPU of the flush
  * @addr: virtual address of page to be flushed
  *
- * Flush one page from the TLB of all CPUs, for all
- * MMU indexes.
- *
- * When this function returns, no CPUs will subsequently perform
- * translations using the flushed TLBs.
+ * Flush one page from the TLB of the specified CPU, for all MMU
+ * indexes like tlb_flush_page_all_cpus except the source vCPUs work
+ * is scheduled as safe work meaning all flushes will be complete once
+ * the source vCPUs safe work is complete. This will depend on when
+ * the guests translation ends the TB.
  */
 void tlb_flush_page_all_cpus_synced(CPUState *src, vaddr addr);
 /**
@@ -90,13 +97,18 @@ void tlb_flush_page_all_cpus_synced(CPUState *src, vaddr addr);
  */
 void tlb_flush(CPUState *cpu);
 /**
+ * tlb_flush_all_cpus:
+ * @cpu: src CPU of the flush
+ */
+void tlb_flush_all_cpus(CPUState *src_cpu);
+/**
  * tlb_flush_all_cpus_synced:
  * @cpu: src CPU of the flush
  *
- * Flush the entire TLB for all CPUs, for all MMU indexes.
- *
- * When this function returns, no CPUs will subsequently perform
- * translations using the flushed TLBs.
+ * Like tlb_flush_all_cpus except this except the source vCPUs work is
+ * scheduled as safe work meaning all flushes will be complete once
+ * the source vCPUs safe work is complete. This will depend on when
+ * the guests translation ends the TB.
  */
 void tlb_flush_all_cpus_synced(CPUState *src_cpu);
 /**
@@ -111,16 +123,27 @@ void tlb_flush_all_cpus_synced(CPUState *src_cpu);
 void tlb_flush_page_by_mmuidx(CPUState *cpu, vaddr addr,
                               uint16_t idxmap);
 /**
- * tlb_flush_page_by_mmuidx_all_cpus_synced:
+ * tlb_flush_page_by_mmuidx_all_cpus:
  * @cpu: Originating CPU of the flush
  * @addr: virtual address of page to be flushed
  * @idxmap: bitmap of MMU indexes to flush
  *
  * Flush one page from the TLB of all CPUs, for the specified
  * MMU indexes.
+ */
+void tlb_flush_page_by_mmuidx_all_cpus(CPUState *cpu, vaddr addr,
+                                       uint16_t idxmap);
+/**
+ * tlb_flush_page_by_mmuidx_all_cpus_synced:
+ * @cpu: Originating CPU of the flush
+ * @addr: virtual address of page to be flushed
+ * @idxmap: bitmap of MMU indexes to flush
  *
- * When this function returns, no CPUs will subsequently perform
- * translations using the flushed TLBs.
+ * Flush one page from the TLB of all CPUs, for the specified MMU
+ * indexes like tlb_flush_page_by_mmuidx_all_cpus except the source
+ * vCPUs work is scheduled as safe work meaning all flushes will be
+ * complete once  the source vCPUs safe work is complete. This will
+ * depend on when the guests translation ends the TB.
  */
 void tlb_flush_page_by_mmuidx_all_cpus_synced(CPUState *cpu, vaddr addr,
                                               uint16_t idxmap);
@@ -135,15 +158,24 @@ void tlb_flush_page_by_mmuidx_all_cpus_synced(CPUState *cpu, vaddr addr,
  */
 void tlb_flush_by_mmuidx(CPUState *cpu, uint16_t idxmap);
 /**
+ * tlb_flush_by_mmuidx_all_cpus:
+ * @cpu: Originating CPU of the flush
+ * @idxmap: bitmap of MMU indexes to flush
+ *
+ * Flush all entries from all TLBs of all CPUs, for the specified
+ * MMU indexes.
+ */
+void tlb_flush_by_mmuidx_all_cpus(CPUState *cpu, uint16_t idxmap);
+/**
  * tlb_flush_by_mmuidx_all_cpus_synced:
  * @cpu: Originating CPU of the flush
  * @idxmap: bitmap of MMU indexes to flush
  *
- * Flush all entries from the TLB of all CPUs, for the specified
- * MMU indexes.
- *
- * When this function returns, no CPUs will subsequently perform
- * translations using the flushed TLBs.
+ * Flush all entries from all TLBs of all CPUs, for the specified
+ * MMU indexes like tlb_flush_by_mmuidx_all_cpus except except the source
+ * vCPUs work is scheduled as safe work meaning all flushes will be
+ * complete once  the source vCPUs safe work is complete. This will
+ * depend on when the guests translation ends the TB.
  */
 void tlb_flush_by_mmuidx_all_cpus_synced(CPUState *cpu, uint16_t idxmap);
 
@@ -160,6 +192,8 @@ void tlb_flush_page_bits_by_mmuidx(CPUState *cpu, vaddr addr,
                                    uint16_t idxmap, unsigned bits);
 
 /* Similarly, with broadcast and syncing. */
+void tlb_flush_page_bits_by_mmuidx_all_cpus(CPUState *cpu, vaddr addr,
+                                            uint16_t idxmap, unsigned bits);
 void tlb_flush_page_bits_by_mmuidx_all_cpus_synced
     (CPUState *cpu, vaddr addr, uint16_t idxmap, unsigned bits);
 
@@ -179,6 +213,9 @@ void tlb_flush_range_by_mmuidx(CPUState *cpu, vaddr addr,
                                unsigned bits);
 
 /* Similarly, with broadcast and syncing. */
+void tlb_flush_range_by_mmuidx_all_cpus(CPUState *cpu, vaddr addr,
+                                        vaddr len, uint16_t idxmap,
+                                        unsigned bits);
 void tlb_flush_range_by_mmuidx_all_cpus_synced(CPUState *cpu,
                                                vaddr addr,
                                                vaddr len,
@@ -251,10 +288,16 @@ static inline void tlb_destroy(CPUState *cpu)
 static inline void tlb_flush_page(CPUState *cpu, vaddr addr)
 {
 }
+static inline void tlb_flush_page_all_cpus(CPUState *src, vaddr addr)
+{
+}
 static inline void tlb_flush_page_all_cpus_synced(CPUState *src, vaddr addr)
 {
 }
 static inline void tlb_flush(CPUState *cpu)
+{
+}
+static inline void tlb_flush_all_cpus(CPUState *src_cpu)
 {
 }
 static inline void tlb_flush_all_cpus_synced(CPUState *src_cpu)
@@ -268,11 +311,20 @@ static inline void tlb_flush_page_by_mmuidx(CPUState *cpu,
 static inline void tlb_flush_by_mmuidx(CPUState *cpu, uint16_t idxmap)
 {
 }
+static inline void tlb_flush_page_by_mmuidx_all_cpus(CPUState *cpu,
+                                                     vaddr addr,
+                                                     uint16_t idxmap)
+{
+}
 static inline void tlb_flush_page_by_mmuidx_all_cpus_synced(CPUState *cpu,
                                                             vaddr addr,
                                                             uint16_t idxmap)
 {
 }
+static inline void tlb_flush_by_mmuidx_all_cpus(CPUState *cpu, uint16_t idxmap)
+{
+}
+
 static inline void tlb_flush_by_mmuidx_all_cpus_synced(CPUState *cpu,
                                                        uint16_t idxmap)
 {
@@ -281,6 +333,12 @@ static inline void tlb_flush_page_bits_by_mmuidx(CPUState *cpu,
                                                  vaddr addr,
                                                  uint16_t idxmap,
                                                  unsigned bits)
+{
+}
+static inline void tlb_flush_page_bits_by_mmuidx_all_cpus(CPUState *cpu,
+                                                          vaddr addr,
+                                                          uint16_t idxmap,
+                                                          unsigned bits)
 {
 }
 static inline void
@@ -293,6 +351,13 @@ static inline void tlb_flush_range_by_mmuidx(CPUState *cpu, vaddr addr,
                                              unsigned bits)
 {
 }
+static inline void tlb_flush_range_by_mmuidx_all_cpus(CPUState *cpu,
+                                                      vaddr addr,
+                                                      vaddr len,
+                                                      uint16_t idxmap,
+                                                      unsigned bits)
+{
+}
 static inline void tlb_flush_range_by_mmuidx_all_cpus_synced(CPUState *cpu,
                                                              vaddr addr,
                                                              vaddr len,
@@ -301,9 +366,6 @@ static inline void tlb_flush_range_by_mmuidx_all_cpus_synced(CPUState *cpu,
 {
 }
 #endif
-
-#if defined(CONFIG_TCG)
-
 /**
  * probe_access:
  * @env: CPUArchState
@@ -360,7 +422,6 @@ int probe_access_flags(CPUArchState *env, vaddr addr, int size,
                        bool nonfault, void **phost, uintptr_t retaddr);
 
 #ifndef CONFIG_USER_ONLY
-
 /**
  * probe_access_full:
  * Like probe_access_flags, except also return into @pfull.
@@ -396,8 +457,7 @@ int probe_access_full_mmu(CPUArchState *env, vaddr addr, int size,
                           MMUAccessType access_type, int mmu_idx,
                           void **phost, CPUTLBEntryFull **pfull);
 
-#endif /* !CONFIG_USER_ONLY */
-#endif /* CONFIG_TCG */
+#endif
 
 static inline tb_page_addr_t tb_page_addr0(const TranslationBlock *tb)
 {
@@ -447,6 +507,9 @@ static inline void tb_set_page_addr1(TranslationBlock *tb,
     tb->page_addr[1] = addr;
 #endif
 }
+
+/* current cflags for hashing/comparison */
+uint32_t curr_cflags(CPUState *cpu);
 
 /* TranslationBlock invalidate API */
 void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr);
@@ -591,6 +654,7 @@ static inline void mmap_unlock(void) {}
 #define WITH_MMAP_LOCK_GUARD()
 
 void tlb_reset_dirty(CPUState *cpu, ram_addr_t start1, ram_addr_t length);
+void tlb_set_dirty(CPUState *cpu, vaddr addr);
 void tlb_reset_dirty_range_all(ram_addr_t start, ram_addr_t length);
 
 MemoryRegionSection *

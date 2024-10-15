@@ -29,6 +29,7 @@
 #include "qapi/error.h"
 #include "qapi/qapi-events-qdev.h"
 #include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qerror.h"
 #include "qapi/visitor.h"
 #include "qemu/error-report.h"
 #include "qemu/option.h"
@@ -478,8 +479,7 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
     static int unattached_count;
 
     if (dev->hotplugged && !dc->hotpluggable) {
-        error_setg(errp, "Device '%s' does not support hotplugging",
-                   object_get_typename(obj));
+        error_setg(errp, QERR_DEVICE_NO_HOTPLUG, object_get_typename(obj));
         return;
     }
 
@@ -760,10 +760,10 @@ static void device_phases_reset(DeviceState *dev)
         rc->phases.enter(OBJECT(dev), RESET_TYPE_COLD);
     }
     if (rc->phases.hold) {
-        rc->phases.hold(OBJECT(dev), RESET_TYPE_COLD);
+        rc->phases.hold(OBJECT(dev));
     }
     if (rc->phases.exit) {
-        rc->phases.exit(OBJECT(dev), RESET_TYPE_COLD);
+        rc->phases.exit(OBJECT(dev));
     }
 }
 

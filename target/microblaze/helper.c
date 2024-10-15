@@ -21,7 +21,6 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "qemu/host-utils.h"
 #include "exec/log.h"
 
@@ -52,7 +51,7 @@ bool mb_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     if (mmu_idx == MMU_NOMMU_IDX) {
         /* MMU disabled or not available.  */
         address &= TARGET_PAGE_MASK;
-        prot = PAGE_RWX;
+        prot = PAGE_BITS;
         tlb_set_page_with_attrs(cs, address, address, attrs, prot, mmu_idx,
                                 TARGET_PAGE_SIZE);
         return true;

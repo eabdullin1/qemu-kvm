@@ -44,6 +44,13 @@ static ResettableContainer *get_root_reset_container(void)
 }
 
 /*
+ * Reason why the currently in-progress qemu_devices_reset() was called.
+ * If we made at least SHUTDOWN_CAUSE_SNAPSHOT_LOAD have a corresponding
+ * ResetType we could perhaps avoid the need for this global.
+ */
+static ShutdownCause device_reset_reason;
+
+/*
  * This is an Object which implements Resettable simply to call the
  * callback function in the hold phase.
  */
@@ -66,11 +73,12 @@ static ResettableState *legacy_reset_get_state(Object *obj)
     return &lr->reset_state;
 }
 
-static void legacy_reset_hold(Object *obj, ResetType type)
+static void legacy_reset_hold(Object *obj)
 {
     LegacyReset *lr = LEGACY_RESET(obj);
 
-    if (type == RESET_TYPE_SNAPSHOT_LOAD && lr->skip_on_snapshot_load) {
+    if (device_reset_reason == SHUTDOWN_CAUSE_SNAPSHOT_LOAD &&
+        lr->skip_on_snapshot_load) {
         return;
     }
     lr->func(lr->opaque);
@@ -172,9 +180,8 @@ void qemu_unregister_resettable(Object *obj)
 
 void qemu_devices_reset(ShutdownCause reason)
 {
-    ResetType type = (reason == SHUTDOWN_CAUSE_SNAPSHOT_LOAD) ?
-        RESET_TYPE_SNAPSHOT_LOAD : RESET_TYPE_COLD;
+    device_reset_reason = reason;
 
     /* Reset the simulation */
-    resettable_reset(OBJECT(get_root_reset_container()), type);
+    resettable_reset(OBJECT(get_root_reset_container()), RESET_TYPE_COLD);
 }

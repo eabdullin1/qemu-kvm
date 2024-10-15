@@ -19,7 +19,6 @@
 
 #include "qemu/osdep.h"
 #include "gdbstub/helpers.h"
-#include "cpu.h"
 
 
 #define LCX_REGNUM         32

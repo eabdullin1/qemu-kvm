@@ -113,6 +113,20 @@ static const int tcg_target_call_iarg_regs[] = {
     TCG_REG_A7,
 };
 
+#ifndef have_zbb
+bool have_zbb;
+#endif
+#if defined(__riscv_arch_test) && defined(__riscv_zba)
+# define have_zba true
+#else
+static bool have_zba;
+#endif
+#if defined(__riscv_arch_test) && defined(__riscv_zicond)
+# define have_zicond true
+#else
+static bool have_zicond;
+#endif
+
 static TCGReg tcg_target_call_oarg_reg(TCGCallReturnKind kind, int slot)
 {
     tcg_debug_assert(kind == TCG_CALL_RET_NORMAL);
@@ -580,7 +594,7 @@ static void tcg_out_ext8u(TCGContext *s, TCGReg ret, TCGReg arg)
 
 static void tcg_out_ext16u(TCGContext *s, TCGReg ret, TCGReg arg)
 {
-    if (cpuinfo & CPUINFO_ZBB) {
+    if (have_zbb) {
         tcg_out_opc_reg(s, OPC_ZEXT_H, ret, arg, TCG_REG_ZERO);
     } else {
         tcg_out_opc_imm(s, OPC_SLLIW, ret, arg, 16);
@@ -590,7 +604,7 @@ static void tcg_out_ext16u(TCGContext *s, TCGReg ret, TCGReg arg)
 
 static void tcg_out_ext32u(TCGContext *s, TCGReg ret, TCGReg arg)
 {
-    if (cpuinfo & CPUINFO_ZBA) {
+    if (have_zba) {
         tcg_out_opc_reg(s, OPC_ADD_UW, ret, arg, TCG_REG_ZERO);
     } else {
         tcg_out_opc_imm(s, OPC_SLLI, ret, arg, 32);
@@ -600,7 +614,7 @@ static void tcg_out_ext32u(TCGContext *s, TCGReg ret, TCGReg arg)
 
 static void tcg_out_ext8s(TCGContext *s, TCGType type, TCGReg ret, TCGReg arg)
 {
-    if (cpuinfo & CPUINFO_ZBB) {
+    if (have_zbb) {
         tcg_out_opc_imm(s, OPC_SEXT_B, ret, arg, 0);
     } else {
         tcg_out_opc_imm(s, OPC_SLLIW, ret, arg, 24);
@@ -610,7 +624,7 @@ static void tcg_out_ext8s(TCGContext *s, TCGType type, TCGReg ret, TCGReg arg)
 
 static void tcg_out_ext16s(TCGContext *s, TCGType type, TCGReg ret, TCGReg arg)
 {
-    if (cpuinfo & CPUINFO_ZBB) {
+    if (have_zbb) {
         tcg_out_opc_imm(s, OPC_SEXT_H, ret, arg, 0);
     } else {
         tcg_out_opc_imm(s, OPC_SLLIW, ret, arg, 16);
@@ -1066,7 +1080,7 @@ static void tcg_out_movcond(TCGContext *s, TCGCond cond, TCGReg ret,
     int tmpflags;
     TCGReg t;
 
-    if (!(cpuinfo & CPUINFO_ZICOND) && (!c_cmp2 || cmp2 == 0)) {
+    if (!have_zicond && (!c_cmp2 || cmp2 == 0)) {
         tcg_out_movcond_br2(s, cond, ret, cmp1, cmp2,
                             val1, c_val1, val2, c_val2);
         return;
@@ -1075,7 +1089,7 @@ static void tcg_out_movcond(TCGContext *s, TCGCond cond, TCGReg ret,
     tmpflags = tcg_out_setcond_int(s, cond, TCG_REG_TMP0, cmp1, cmp2, c_cmp2);
     t = tmpflags & ~SETCOND_FLAGS;
 
-    if (cpuinfo & CPUINFO_ZICOND) {
+    if (have_zicond) {
         if (tmpflags & SETCOND_INV) {
             tcg_out_movcond_zicond(s, ret, t, val2, c_val2, val1, c_val1);
         } else {
@@ -1290,7 +1304,7 @@ static TCGLabelQemuLdst *prepare_host_addr(TCGContext *s, TCGReg *pbase,
         /* TLB Hit - translate address using addend.  */
         if (addr_type != TCG_TYPE_I32) {
             tcg_out_opc_reg(s, OPC_ADD, TCG_REG_TMP0, addr_reg, TCG_REG_TMP2);
-        } else if (cpuinfo & CPUINFO_ZBA) {
+        } else if (have_zba) {
             tcg_out_opc_reg(s, OPC_ADD_UW, TCG_REG_TMP0,
                             addr_reg, TCG_REG_TMP2);
         } else {
@@ -1321,7 +1335,7 @@ static TCGLabelQemuLdst *prepare_host_addr(TCGContext *s, TCGReg *pbase,
             if (addr_type != TCG_TYPE_I32) {
                 tcg_out_opc_reg(s, OPC_ADD, base, addr_reg,
                                 TCG_GUEST_BASE_REG);
-            } else if (cpuinfo & CPUINFO_ZBA) {
+            } else if (have_zba) {
                 tcg_out_opc_reg(s, OPC_ADD_UW, base, addr_reg,
                                 TCG_GUEST_BASE_REG);
             } else {
@@ -2096,8 +2110,62 @@ static void tcg_out_tb_start(TCGContext *s)
     /* nothing to do */
 }
 
+static volatile sig_atomic_t got_sigill;
+
+static void sigill_handler(int signo, siginfo_t *si, void *data)
+{
+    /* Skip the faulty instruction */
+    ucontext_t *uc = (ucontext_t *)data;
+    uc->uc_mcontext.__gregs[REG_PC] += 4;
+
+    got_sigill = 1;
+}
+
+static void tcg_target_detect_isa(void)
+{
+#if !defined(have_zba) || !defined(have_zbb) || !defined(have_zicond)
+    /*
+     * TODO: It is expected that this will be determinable via
+     * linux riscv_hwprobe syscall, not yet merged.
+     * In the meantime, test via sigill.
+     */
+
+    struct sigaction sa_old, sa_new;
+
+    memset(&sa_new, 0, sizeof(sa_new));
+    sa_new.sa_flags = SA_SIGINFO;
+    sa_new.sa_sigaction = sigill_handler;
+    sigaction(SIGILL, &sa_new, &sa_old);
+
+#ifndef have_zba
+    /* Probe for Zba: add.uw zero,zero,zero. */
+    got_sigill = 0;
+    asm volatile(".insn r 0x3b, 0, 0x04, zero, zero, zero" : : : "memory");
+    have_zba = !got_sigill;
+#endif
+
+#ifndef have_zbb
+    /* Probe for Zba: andn zero,zero,zero. */
+    got_sigill = 0;
+    asm volatile(".insn r 0x33, 7, 0x20, zero, zero, zero" : : : "memory");
+    have_zbb = !got_sigill;
+#endif
+
+#ifndef have_zicond
+    /* Probe for Zicond: czero.eqz zero,zero,zero. */
+    got_sigill = 0;
+    asm volatile(".insn r 0x33, 5, 0x07, zero, zero, zero" : : : "memory");
+    have_zicond = !got_sigill;
+#endif
+
+    sigaction(SIGILL, &sa_old, NULL);
+#endif
+}
+
 static void tcg_target_init(TCGContext *s)
 {
+    tcg_target_detect_isa();
+
     tcg_target_available_regs[TCG_TYPE_I32] = 0xffffffff;
     tcg_target_available_regs[TCG_TYPE_I64] = 0xffffffff;
 

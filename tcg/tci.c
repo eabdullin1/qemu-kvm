@@ -19,7 +19,6 @@
 
 #include "qemu/osdep.h"
 #include "tcg/tcg.h"
-#include "tcg/helper-info.h"
 #include "tcg/tcg-ldst.h"
 #include <ffi.h>
 

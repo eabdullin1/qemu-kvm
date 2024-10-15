@@ -30,7 +30,6 @@ native:
 - clippy
 - cloud-init
 - cloud-utils-growpart
-- compiler-rt
 - cpp
 - ctags
 - cyrus-sasl-devel
@@ -72,7 +71,6 @@ native:
 - grep
 - gtk-doc
 - gtk-update-icon-cache
-- gtk-vnc2-devel
 - gtk3-devel
 - gzip
 - hostname
@@ -241,7 +239,6 @@ native:
 - ruby-devel
 - rubygem-rake
 - rust
-- rust-std-static
 - sanlock-devel
 - screen
 - scrub
@@ -282,5 +279,4 @@ native:
 - zlib-static
 - zstd
 pypi:
-- black
 - build

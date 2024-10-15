@@ -384,7 +384,6 @@ SCSIDevice *scsi_bus_legacy_add_drive(SCSIBus *bus, BlockBackend *blk,
     DeviceState *dev;
     SCSIDevice *s;
     DriveInfo *dinfo;
-    Error *local_err = NULL;
 
     if (blk_is_sg(blk)) {
         driver = "scsi-generic";
@@ -403,14 +402,6 @@ SCSIDevice *scsi_bus_legacy_add_drive(SCSIBus *bus, BlockBackend *blk,
 
     s = SCSI_DEVICE(dev);
     s->conf = *conf;
-
-    check_boot_index(conf->bootindex, &local_err);
-    if (local_err) {
-        object_unparent(OBJECT(dev));
-        error_propagate(errp, local_err);
-        return NULL;
-    }
-    add_boot_device_path(conf->bootindex, dev, NULL);
 
     qdev_prop_set_uint32(dev, "scsi-id", unit);
     if (object_property_find(OBJECT(dev), "removable")) {

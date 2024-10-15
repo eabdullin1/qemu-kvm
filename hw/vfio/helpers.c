@@ -107,12 +107,12 @@ static const char *index_to_str(VFIODevice *vbasedev, int index)
     }
 }
 
-bool vfio_set_irq_signaling(VFIODevice *vbasedev, int index, int subindex,
-                            int action, int fd, Error **errp)
+int vfio_set_irq_signaling(VFIODevice *vbasedev, int index, int subindex,
+                           int action, int fd, Error **errp)
 {
     ERRP_GUARD();
-    g_autofree struct vfio_irq_set *irq_set = NULL;
-    int argsz;
+    struct vfio_irq_set *irq_set;
+    int argsz, ret = 0;
     const char *name;
     int32_t *pfd;
 
@@ -127,11 +127,16 @@ bool vfio_set_irq_signaling(VFIODevice *vbasedev, int index, int subindex,
     pfd = (int32_t *)&irq_set->data;
     *pfd = fd;
 
-    if (!ioctl(vbasedev->fd, VFIO_DEVICE_SET_IRQS, irq_set)) {
-        return true;
+    if (ioctl(vbasedev->fd, VFIO_DEVICE_SET_IRQS, irq_set)) {
+        ret = -errno;
+    }
+    g_free(irq_set);
+
+    if (!ret) {
+        return 0;
     }
 
-    error_setg_errno(errp, errno, "VFIO_DEVICE_SET_IRQS failure");
+    error_setg_errno(errp, -ret, "VFIO_DEVICE_SET_IRQS failure");
 
     name = index_to_str(vbasedev, index);
     if (name) {
@@ -142,7 +147,7 @@ bool vfio_set_irq_signaling(VFIODevice *vbasedev, int index, int subindex,
     error_prepend(errp,
                   "Failed to %s %s eventfd signaling for interrupt ",
                   fd < 0 ? "tear down" : "set up", action_to_str(action));
-    return false;
+    return ret;
 }
 
 /*
@@ -343,7 +348,7 @@ static int vfio_setup_region_sparse_mmaps(VFIORegion *region,
 int vfio_region_setup(Object *obj, VFIODevice *vbasedev, VFIORegion *region,
                       int index, const char *name)
 {
-    g_autofree struct vfio_region_info *info = NULL;
+    struct vfio_region_info *info;
     int ret;
 
     ret = vfio_get_region_info(vbasedev, index, &info);
@@ -375,6 +380,8 @@ int vfio_region_setup(Object *obj, VFIODevice *vbasedev, VFIORegion *region,
             }
         }
     }
+
+    g_free(info);
 
     trace_vfio_region_setup(vbasedev->name, index, name,
                             region->flags, region->fd_offset, region->size);
@@ -592,19 +599,20 @@ int vfio_get_dev_region_info(VFIODevice *vbasedev, uint32_t type,
 
 bool vfio_has_region_cap(VFIODevice *vbasedev, int region, uint16_t cap_type)
 {
-    g_autofree struct vfio_region_info *info = NULL;
+    struct vfio_region_info *info = NULL;
     bool ret = false;
 
     if (!vfio_get_region_info(vbasedev, region, &info)) {
         if (vfio_get_region_info_cap(info, cap_type)) {
             ret = true;
         }
+        g_free(info);
     }
 
     return ret;
 }
 
-bool vfio_device_get_name(VFIODevice *vbasedev, Error **errp)
+int vfio_device_get_name(VFIODevice *vbasedev, Error **errp)
 {
     ERRP_GUARD();
     struct stat st;
@@ -613,7 +621,7 @@ bool vfio_device_get_name(VFIODevice *vbasedev, Error **errp)
         if (stat(vbasedev->sysfsdev, &st) < 0) {
             error_setg_errno(errp, errno, "no such host device");
             error_prepend(errp, VFIO_MSG_PREFIX, vbasedev->sysfsdev);
-            return false;
+            return -errno;
         }
         /* User may specify a name, e.g: VFIO platform device */
         if (!vbasedev->name) {
@@ -622,7 +630,7 @@ bool vfio_device_get_name(VFIODevice *vbasedev, Error **errp)
     } else {
         if (!vbasedev->iommufd) {
             error_setg(errp, "Use FD passing only with iommufd backend");
-            return false;
+            return -EINVAL;
         }
         /*
          * Give a name with fd so any function printing out vbasedev->name
@@ -633,7 +641,7 @@ bool vfio_device_get_name(VFIODevice *vbasedev, Error **errp)
         }
     }
 
-    return true;
+    return 0;
 }
 
 void vfio_device_set_fd(VFIODevice *vbasedev, const char *str, Error **errp)
@@ -657,46 +665,4 @@ void vfio_device_init(VFIODevice *vbasedev, int type, VFIODeviceOps *ops,
     vbasedev->fd = -1;
 
     vbasedev->ram_block_discard_allowed = ram_discard;
-}
-
-int vfio_device_get_aw_bits(VFIODevice *vdev)
-{
-    /*
-     * iova_ranges is a sorted list. For old kernels that support
-     * VFIO but not support query of iova ranges, iova_ranges is NULL,
-     * in this case HOST_IOMMU_DEVICE_CAP_AW_BITS_MAX(64) is returned.
-     */
-    GList *l = g_list_last(vdev->bcontainer->iova_ranges);
-
-    if (l) {
-        Range *range = l->data;
-        return range_get_last_bit(range) + 1;
-    }
-
-    return HOST_IOMMU_DEVICE_CAP_AW_BITS_MAX;
-}
-
-bool vfio_device_is_mdev(VFIODevice *vbasedev)
-{
-    g_autofree char *subsys = NULL;
-    g_autofree char *tmp = NULL;
-
-    if (!vbasedev->sysfsdev) {
-        return false;
-    }
-
-    tmp = g_strdup_printf("%s/subsystem", vbasedev->sysfsdev);
-    subsys = realpath(tmp, NULL);
-    return subsys && (strcmp(subsys, "/sys/bus/mdev") == 0);
-}
-
-bool vfio_device_hiod_realize(VFIODevice *vbasedev, Error **errp)
-{
-    HostIOMMUDevice *hiod = vbasedev->hiod;
-
-    if (!hiod) {
-        return true;
-    }
-
-    return HOST_IOMMU_DEVICE_GET_CLASS(hiod)->realize(hiod, vbasedev, errp);
 }

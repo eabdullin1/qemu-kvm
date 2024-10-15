@@ -23,8 +23,6 @@
 #include "hw/s390x/s390-virtio-ccw.h"
 #include "hw/s390x/s390-ccw.h"
 
-bool css_migration_enabled = true;
-
 typedef struct CrwContainer {
     CRW crw;
     QTAILQ_ENTRY(CrwContainer) sibling;
@@ -182,7 +180,7 @@ static const VMStateDescription vmstate_orb = {
 
 static bool vmstate_schdev_orb_needed(void *opaque)
 {
-    return css_migration_enabled;
+    return css_migration_enabled();
 }
 
 static const VMStateDescription vmstate_schdev_orb = {
@@ -390,7 +388,7 @@ static int subch_dev_post_load(void *opaque, int version_id)
         css_subch_assign(s->cssid, s->ssid, s->schid, s->devno, s);
     }
 
-    if (css_migration_enabled) {
+    if (css_migration_enabled()) {
         /* No compat voodoo to do ;) */
         return 0;
     }
@@ -414,9 +412,7 @@ static int subch_dev_post_load(void *opaque, int version_id)
 
 void css_register_vmstate(void)
 {
-    if (css_migration_enabled) {
-        vmstate_register(NULL, 0, &vmstate_css, &channel_subsys);
-    }
+    vmstate_register(NULL, 0, &vmstate_css, &channel_subsys);
 }
 
 IndAddr *get_indicator(hwaddr ind_addr, int len)

@@ -22,7 +22,6 @@
 #include "cpu.h"
 #include "migration/vmstate.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "hw/loader.h"
 #include "fpu/softfloat.h"
 #include "tcg/debug-assert.h"
@@ -46,7 +45,7 @@ static void rx_cpu_synchronize_from_tb(CPUState *cs,
 {
     RXCPU *cpu = RX_CPU(cs);
 
-    tcg_debug_assert(!tcg_cflags_has(cs, CF_PCREL));
+    tcg_debug_assert(!(cs->tcg_cflags & CF_PCREL));
     cpu->env.pc = tb->pc;
 }
 
@@ -70,7 +69,7 @@ static int riscv_cpu_mmu_index(CPUState *cs, bool ifunc)
     return 0;
 }
 
-static void rx_cpu_reset_hold(Object *obj, ResetType type)
+static void rx_cpu_reset_hold(Object *obj)
 {
     CPUState *cs = CPU(obj);
     RXCPUClass *rcc = RX_CPU_GET_CLASS(obj);
@@ -78,7 +77,7 @@ static void rx_cpu_reset_hold(Object *obj, ResetType type)
     uint32_t *resetvec;
 
     if (rcc->parent_phases.hold) {
-        rcc->parent_phases.hold(obj, type);
+        rcc->parent_phases.hold(obj);
     }
 
     memset(env, 0, offsetof(CPURXState, end_reset_fields));
@@ -192,7 +191,6 @@ static const TCGCPUOps rx_tcg_ops = {
 
 #ifndef CONFIG_USER_ONLY
     .cpu_exec_interrupt = rx_cpu_exec_interrupt,
-    .cpu_exec_halt = rx_cpu_has_work,
     .do_interrupt = rx_cpu_do_interrupt,
 #endif /* !CONFIG_USER_ONLY */
 };

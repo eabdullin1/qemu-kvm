@@ -615,24 +615,11 @@ ChardevBackend *qemu_chr_parse_opts(QemuOpts *opts, Error **errp)
     return backend;
 }
 
-static void qemu_chardev_set_replay(Chardev *chr, Error **errp)
-{
-    if (replay_mode != REPLAY_MODE_NONE) {
-        if (CHARDEV_GET_CLASS(chr)->chr_ioctl) {
-            error_setg(errp, "Replay: ioctl is not supported "
-                             "for serial devices yet");
-            return;
-        }
-        qemu_chr_set_feature(chr, QEMU_CHAR_FEATURE_REPLAY);
-        replay_register_char_driver(chr);
-    }
-}
-
-static Chardev *__qemu_chr_new_from_opts(QemuOpts *opts, GMainContext *context,
-                                         bool replay, Error **errp)
+Chardev *qemu_chr_new_from_opts(QemuOpts *opts, GMainContext *context,
+                                Error **errp)
 {
     const ChardevClass *cc;
-    Chardev *base = NULL, *chr = NULL;
+    Chardev *chr = NULL;
     ChardevBackend *backend = NULL;
     const char *name = qemu_opt_get(opts, "backend");
     const char *id = qemu_opts_id(opts);
@@ -670,11 +657,11 @@ static Chardev *__qemu_chr_new_from_opts(QemuOpts *opts, GMainContext *context,
     chr = qemu_chardev_new(bid ? bid : id,
                            object_class_get_name(OBJECT_CLASS(cc)),
                            backend, context, errp);
+
     if (chr == NULL) {
         goto out;
     }
 
-    base = chr;
     if (bid) {
         Chardev *mux;
         qapi_free_ChardevBackend(backend);
@@ -694,25 +681,11 @@ static Chardev *__qemu_chr_new_from_opts(QemuOpts *opts, GMainContext *context,
 out:
     qapi_free_ChardevBackend(backend);
     g_free(bid);
-
-    if (replay && base) {
-        /* RR should be set on the base device, not the mux */
-        qemu_chardev_set_replay(base, errp);
-    }
-
     return chr;
 }
 
-Chardev *qemu_chr_new_from_opts(QemuOpts *opts, GMainContext *context,
-                                Error **errp)
-{
-    /* XXX: should this really not record/replay? */
-    return __qemu_chr_new_from_opts(opts, context, false, errp);
-}
-
-static Chardev *__qemu_chr_new(const char *label, const char *filename,
-                               bool permit_mux_mon, GMainContext *context,
-                               bool replay)
+Chardev *qemu_chr_new_noreplay(const char *label, const char *filename,
+                               bool permit_mux_mon, GMainContext *context)
 {
     const char *p;
     Chardev *chr;
@@ -720,22 +693,14 @@ static Chardev *__qemu_chr_new(const char *label, const char *filename,
     Error *err = NULL;
 
     if (strstart(filename, "chardev:", &p)) {
-        chr = qemu_chr_find(p);
-        if (replay) {
-            qemu_chardev_set_replay(chr, &err);
-            if (err) {
-                error_report_err(err);
-                return NULL;
-            }
-        }
-        return chr;
+        return qemu_chr_find(p);
     }
 
     opts = qemu_chr_parse_compat(label, filename, permit_mux_mon);
     if (!opts)
         return NULL;
 
-    chr = __qemu_chr_new_from_opts(opts, context, replay, &err);
+    chr = qemu_chr_new_from_opts(opts, context, &err);
     if (!chr) {
         error_report_err(err);
         goto out;
@@ -757,18 +722,24 @@ out:
     return chr;
 }
 
-Chardev *qemu_chr_new_noreplay(const char *label, const char *filename,
-                               bool permit_mux_mon, GMainContext *context)
-{
-    return __qemu_chr_new(label, filename, permit_mux_mon, context, false);
-}
-
 static Chardev *qemu_chr_new_permit_mux_mon(const char *label,
                                           const char *filename,
                                           bool permit_mux_mon,
                                           GMainContext *context)
 {
-    return __qemu_chr_new(label, filename, permit_mux_mon, context, true);
+    Chardev *chr;
+    chr = qemu_chr_new_noreplay(label, filename, permit_mux_mon, context);
+    if (chr) {
+        if (replay_mode != REPLAY_MODE_NONE) {
+            qemu_chr_set_feature(chr, QEMU_CHAR_FEATURE_REPLAY);
+        }
+        if (qemu_chr_replay(chr) && CHARDEV_GET_CLASS(chr)->chr_ioctl) {
+            error_report("Replay: ioctl is not supported "
+                         "for serial devices yet");
+        }
+        replay_register_char_driver(chr);
+    }
+    return chr;
 }
 
 Chardev *qemu_chr_new(const char *label, const char *filename,

@@ -364,7 +364,8 @@ static void pnv_chiptod_xscom_write(void *opaque, hwaddr addr,
             qemu_log_mask(LOG_GUEST_ERROR, "pnv_chiptod: xscom write reg"
                           " TOD_MOVE_TOD_TO_TB_REG with no slave target\n");
         } else {
-            PnvCore *pc = chiptod->slave_pc_target;
+            PowerPCCPU *cpu = chiptod->slave_pc_target->threads[0];
+            CPUPPCState *env = &cpu->env;
 
             /*
              * Moving TOD to TB will set the TB of all threads in a
@@ -376,8 +377,8 @@ static void pnv_chiptod_xscom_write(void *opaque, hwaddr addr,
              * thread 0.
              */
 
-            if (pc->tod_state.tb_ready_for_tod) {
-                pc->tod_state.tod_sent_to_tb = 1;
+            if (env->pnv_tod_tbst.tb_ready_for_tod) {
+                env->pnv_tod_tbst.tod_sent_to_tb = 1;
             } else {
                 qemu_log_mask(LOG_GUEST_ERROR, "pnv_chiptod: xscom write reg"
                               " TOD_MOVE_TOD_TO_TB_REG with TB not ready to"

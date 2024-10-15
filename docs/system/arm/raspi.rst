@@ -40,6 +40,7 @@ Implemented devices
 Missing devices
 ---------------
 
+ * Analog to Digital Converter (ADC)
  * Pulse Width Modulation (PWM)
  * PCIE Root Port (raspi4b)
  * GENET Ethernet Controller (raspi4b)

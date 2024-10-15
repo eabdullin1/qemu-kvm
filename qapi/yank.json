@@ -81,7 +81,7 @@
 # Errors:
 #     - If any of the YankInstances doesn't exist, DeviceNotFound
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "yank",
 #          "arguments": {
@@ -104,7 +104,7 @@
 #
 # Returns: list of @YankInstance
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-yank" }
 #     <- { "return": [

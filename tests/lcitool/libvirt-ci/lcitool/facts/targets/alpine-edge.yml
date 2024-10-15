@@ -2,7 +2,6 @@
 os:
   name: 'Alpine'
   version: 'Edge'
-  stable: false
 
 packaging:
   format: 'apk'

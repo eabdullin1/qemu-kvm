@@ -20,7 +20,6 @@
 #include "qom/object_interfaces.h"
 #include "qemu/mmap-alloc.h"
 #include "qemu/madvise.h"
-#include "qemu/cutils.h"
 #include "hw/qdev-core.h"
 
 #ifdef CONFIG_NUMA
@@ -170,24 +169,19 @@ static void host_memory_backend_set_merge(Object *obj, bool value, Error **errp)
 {
     HostMemoryBackend *backend = MEMORY_BACKEND(obj);
 
-    if (QEMU_MADV_MERGEABLE == QEMU_MADV_INVALID) {
-        if (value) {
-            error_setg(errp, "Memory merging is not supported on this host");
-        }
-        assert(!backend->merge);
+    if (!host_memory_backend_mr_inited(backend)) {
+        backend->merge = value;
         return;
     }
 
-    if (!host_memory_backend_mr_inited(backend) &&
-        value != backend->merge) {
+    if (value != backend->merge) {
         void *ptr = memory_region_get_ram_ptr(&backend->mr);
         uint64_t sz = memory_region_size(&backend->mr);
 
         qemu_madvise(ptr, sz,
                      value ? QEMU_MADV_MERGEABLE : QEMU_MADV_UNMERGEABLE);
+        backend->merge = value;
     }
-
-    backend->merge = value;
 }
 
 static bool host_memory_backend_get_dump(Object *obj, Error **errp)
@@ -201,24 +195,19 @@ static void host_memory_backend_set_dump(Object *obj, bool value, Error **errp)
 {
     HostMemoryBackend *backend = MEMORY_BACKEND(obj);
 
-    if (QEMU_MADV_DONTDUMP == QEMU_MADV_INVALID) {
-        if (!value) {
-            error_setg(errp, "Dumping guest memory cannot be disabled on this host");
-        }
-        assert(backend->dump);
+    if (!host_memory_backend_mr_inited(backend)) {
+        backend->dump = value;
         return;
     }
 
-    if (host_memory_backend_mr_inited(backend) &&
-        value != backend->dump) {
+    if (value != backend->dump) {
         void *ptr = memory_region_get_ram_ptr(&backend->mr);
         uint64_t sz = memory_region_size(&backend->mr);
 
         qemu_madvise(ptr, sz,
                      value ? QEMU_MADV_DODUMP : QEMU_MADV_DONTDUMP);
+        backend->dump = value;
     }
-
-    backend->dump = value;
 }
 
 static bool host_memory_backend_get_prealloc(Object *obj, Error **errp)
@@ -288,7 +277,6 @@ static void host_memory_backend_init(Object *obj)
     /* TODO: convert access to globals to compat properties */
     backend->merge = machine_mem_merge(machine);
     backend->dump = machine_dump_guest_core(machine);
-    backend->guest_memfd = machine_require_guest_memfd(machine);
     backend->reserve = true;
     backend->prealloc_threads = machine->smp.cpus;
 }
@@ -336,7 +324,6 @@ host_memory_backend_memory_complete(UserCreatable *uc, Error **errp)
     HostMemoryBackendClass *bc = MEMORY_BACKEND_GET_CLASS(uc);
     void *ptr;
     uint64_t sz;
-    size_t pagesize;
     bool async = !phase_check(PHASE_LATE_BACKENDS_CREATED);
 
     if (!bc->alloc) {
@@ -348,14 +335,6 @@ host_memory_backend_memory_complete(UserCreatable *uc, Error **errp)
 
     ptr = memory_region_get_ram_ptr(&backend->mr);
     sz = memory_region_size(&backend->mr);
-    pagesize = qemu_ram_pagesize(backend->mr.ram_block);
-
-    if (backend->aligned && !QEMU_IS_ALIGNED(sz, pagesize)) {
-        g_autofree char *pagesize_str = size_to_str(pagesize);
-        error_setg(errp, "backend '%s' memory size must be multiple of %s",
-                   object_get_typename(OBJECT(uc)), pagesize_str);
-        return;
-    }
 
     if (backend->merge) {
         qemu_madvise(ptr, sz, QEMU_MADV_MERGEABLE);

@@ -5,7 +5,7 @@
  * Define HELPER_H for the header file to be expanded.
  */
 
-#include "exec/helper-head.h.inc"
+#include "exec/helper-head.h"
 
 /*
  * Work around an issue with --enable-lto, in which GCC's ipa-split pass

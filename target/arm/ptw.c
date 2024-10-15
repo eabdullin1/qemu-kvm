@@ -11,7 +11,6 @@
 #include "qemu/range.h"
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "cpu.h"
 #include "internals.h"
 #include "cpu-features.h"
@@ -3576,11 +3575,7 @@ bool get_phys_addr(CPUARMState *env, target_ulong address,
     case ARMMMUIdx_Stage1_E1:
     case ARMMMUIdx_Stage1_E1_PAN:
     case ARMMMUIdx_E2:
-        if (arm_aa32_secure_pl1_0(env)) {
-            ss = ARMSS_Secure;
-        } else {
-            ss = arm_security_space_below_el3(env);
-        }
+        ss = arm_security_space_below_el3(env);
         break;
     case ARMMMUIdx_Stage2:
         /*

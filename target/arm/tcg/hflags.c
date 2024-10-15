@@ -38,16 +38,8 @@ static bool aprofile_require_alignment(CPUARMState *env, int el, uint64_t sctlr)
     }
 
     /*
-     * With PMSA, when the MPU is disabled, all memory types in the
-     * default map are Normal, so don't need aligment enforcing.
-     */
-    if (arm_feature(env, ARM_FEATURE_PMSA)) {
-        return false;
-    }
-
-    /*
-     * With VMSA, if translation is disabled, then the default memory type
-     * is Device(-nGnRnE) instead of Normal, which requires that alignment
+     * If translation is disabled, then the default memory type is
+     * Device(-nGnRnE) instead of Normal, which requires that alignment
      * be enforced.  Since this affects all ram, it is most efficient
      * to handle this during translation.
      */
@@ -196,10 +188,6 @@ static CPUARMTBFlags rebuild_hflags_a32(CPUARMState *env, int fp_el,
         && arm_el_is_aa64(env, 1)
         && !sme_fa64(env, el)) {
         DP_TBFLAG_A32(flags, SME_TRAP_NONSTREAMING, 1);
-    }
-
-    if (arm_aa32_secure_pl1_0(env)) {
-        DP_TBFLAG_A32(flags, S_PL1_0, 1);
     }
 
     return rebuild_hflags_common_32(env, fp_el, mmu_idx, flags);

@@ -28,16 +28,17 @@
 
 static ssize_t qio_channel_tls_write_handler(const char *buf,
                                              size_t len,
-                                             void *opaque,
-                                             Error **errp)
+                                             void *opaque)
 {
     QIOChannelTLS *tioc = QIO_CHANNEL_TLS(opaque);
     ssize_t ret;
 
-    ret = qio_channel_write(tioc->master, buf, len, errp);
+    ret = qio_channel_write(tioc->master, buf, len, NULL);
     if (ret == QIO_CHANNEL_ERR_BLOCK) {
-        return QCRYPTO_TLS_SESSION_ERR_BLOCK;
+        errno = EAGAIN;
+        return -1;
     } else if (ret < 0) {
+        errno = EIO;
         return -1;
     }
     return ret;
@@ -45,16 +46,17 @@ static ssize_t qio_channel_tls_write_handler(const char *buf,
 
 static ssize_t qio_channel_tls_read_handler(char *buf,
                                             size_t len,
-                                            void *opaque,
-                                            Error **errp)
+                                            void *opaque)
 {
     QIOChannelTLS *tioc = QIO_CHANNEL_TLS(opaque);
     ssize_t ret;
 
-    ret = qio_channel_read(tioc->master, buf, len, errp);
+    ret = qio_channel_read(tioc->master, buf, len, NULL);
     if (ret == QIO_CHANNEL_ERR_BLOCK) {
-        return QCRYPTO_TLS_SESSION_ERR_BLOCK;
+        errno = EAGAIN;
+        return -1;
     } else if (ret < 0) {
+        errno = EIO;
         return -1;
     }
     return ret;
@@ -67,40 +69,37 @@ qio_channel_tls_new_server(QIOChannel *master,
                            const char *aclname,
                            Error **errp)
 {
-    QIOChannelTLS *tioc;
-    QIOChannel *ioc;
+    QIOChannelTLS *ioc;
 
-    tioc = QIO_CHANNEL_TLS(object_new(TYPE_QIO_CHANNEL_TLS));
-    ioc = QIO_CHANNEL(tioc);
+    ioc = QIO_CHANNEL_TLS(object_new(TYPE_QIO_CHANNEL_TLS));
 
-    tioc->master = master;
-    ioc->follow_coroutine_ctx = master->follow_coroutine_ctx;
+    ioc->master = master;
     if (qio_channel_has_feature(master, QIO_CHANNEL_FEATURE_SHUTDOWN)) {
-        qio_channel_set_feature(ioc, QIO_CHANNEL_FEATURE_SHUTDOWN);
+        qio_channel_set_feature(QIO_CHANNEL(ioc), QIO_CHANNEL_FEATURE_SHUTDOWN);
     }
     object_ref(OBJECT(master));
 
-    tioc->session = qcrypto_tls_session_new(
+    ioc->session = qcrypto_tls_session_new(
         creds,
         NULL,
         aclname,
         QCRYPTO_TLS_CREDS_ENDPOINT_SERVER,
         errp);
-    if (!tioc->session) {
+    if (!ioc->session) {
         goto error;
     }
 
     qcrypto_tls_session_set_callbacks(
-        tioc->session,
+        ioc->session,
         qio_channel_tls_write_handler,
         qio_channel_tls_read_handler,
-        tioc);
+        ioc);
 
-    trace_qio_channel_tls_new_server(tioc, master, creds, aclname);
-    return tioc;
+    trace_qio_channel_tls_new_server(ioc, master, creds, aclname);
+    return ioc;
 
  error:
-    object_unref(OBJECT(tioc));
+    object_unref(OBJECT(ioc));
     return NULL;
 }
 
@@ -117,7 +116,6 @@ qio_channel_tls_new_client(QIOChannel *master,
     ioc = QIO_CHANNEL(tioc);
 
     tioc->master = master;
-    ioc->follow_coroutine_ctx = master->follow_coroutine_ctx;
     if (qio_channel_has_feature(master, QIO_CHANNEL_FEATURE_SHUTDOWN)) {
         qio_channel_set_feature(ioc, QIO_CHANNEL_FEATURE_SHUTDOWN);
     }
@@ -275,19 +273,24 @@ static ssize_t qio_channel_tls_readv(QIOChannel *ioc,
     ssize_t got = 0;
 
     for (i = 0 ; i < niov ; i++) {
-        ssize_t ret = qcrypto_tls_session_read(
-            tioc->session,
-            iov[i].iov_base,
-            iov[i].iov_len,
-            qatomic_load_acquire(&tioc->shutdown) & QIO_CHANNEL_SHUTDOWN_READ,
-            errp);
-        if (ret == QCRYPTO_TLS_SESSION_ERR_BLOCK) {
-            if (got) {
-                return got;
-            } else {
-                return QIO_CHANNEL_ERR_BLOCK;
+        ssize_t ret = qcrypto_tls_session_read(tioc->session,
+                                               iov[i].iov_base,
+                                               iov[i].iov_len);
+        if (ret < 0) {
+            if (errno == EAGAIN) {
+                if (got) {
+                    return got;
+                } else {
+                    return QIO_CHANNEL_ERR_BLOCK;
+                }
+            } else if (errno == ECONNABORTED &&
+                       (qatomic_load_acquire(&tioc->shutdown) &
+                        QIO_CHANNEL_SHUTDOWN_READ)) {
+                return 0;
             }
-        } else if (ret < 0) {
+
+            error_setg_errno(errp, errno,
+                             "Cannot read from TLS channel");
             return -1;
         }
         got += ret;
@@ -314,15 +317,18 @@ static ssize_t qio_channel_tls_writev(QIOChannel *ioc,
     for (i = 0 ; i < niov ; i++) {
         ssize_t ret = qcrypto_tls_session_write(tioc->session,
                                                 iov[i].iov_base,
-                                                iov[i].iov_len,
-                                                errp);
-        if (ret == QCRYPTO_TLS_SESSION_ERR_BLOCK) {
-            if (done) {
-                return done;
-            } else {
-                return QIO_CHANNEL_ERR_BLOCK;
+                                                iov[i].iov_len);
+        if (ret <= 0) {
+            if (errno == EAGAIN) {
+                if (done) {
+                    return done;
+                } else {
+                    return QIO_CHANNEL_ERR_BLOCK;
+                }
             }
-        } else if (ret < 0) {
+
+            error_setg_errno(errp, errno,
+                             "Cannot write to TLS channel");
             return -1;
         }
         done += ret;

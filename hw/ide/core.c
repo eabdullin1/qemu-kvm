@@ -1623,24 +1623,11 @@ static bool cmd_read_native_max(IDEState *s, uint8_t cmd)
     /* Refuse if no sectors are addressable (e.g. medium not inserted) */
     if (s->nb_sectors == 0) {
         ide_abort_command(s);
-    } else {
-        /*
-         * Save the active drive parameters, which may have been
-         * limited from their native counterparts by, e.g., INITIALIZE
-         * DEVICE PARAMETERS or SET MAX ADDRESS.
-         */
-        const int aheads = s->heads;
-        const int asectors = s->sectors;
-
-        s->heads = s->drive_heads;
-        s->sectors = s->drive_sectors;
-
-        ide_cmd_lba48_transform(s, lba48);
-        ide_set_sector(s, s->nb_sectors - 1);
-
-        s->heads = aheads;
-        s->sectors = asectors;
+        return true;
     }
+
+    ide_cmd_lba48_transform(s, lba48);
+    ide_set_sector(s, s->nb_sectors - 1);
 
     return true;
 }

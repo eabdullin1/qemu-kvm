@@ -1083,7 +1083,7 @@ static void usbback_event(struct XenLegacyDevice *xendev)
     qemu_bh_schedule(usbif->bh);
 }
 
-static const struct XenDevOps xen_usb_ops = {
+struct XenDevOps xen_usb_ops = {
     .size            = sizeof(struct usbback_info),
     .flags           = DEVOPS_FLAG_NEED_GNTDEV,
     .init            = usbback_init,
@@ -1095,9 +1095,15 @@ static const struct XenDevOps xen_usb_ops = {
     .event           = usbback_event,
 };
 
-static void xen_usb_register_backend(void)
+#else /* USBIF_SHORT_NOT_OK */
+
+static int usbback_not_supported(void)
 {
-    xen_be_register("qusb", &xen_usb_ops);
+    return -EINVAL;
 }
-xen_backend_init(xen_usb_register_backend);
+
+struct XenDevOps xen_usb_ops = {
+    .backend_register = usbback_not_supported,
+};
+
 #endif

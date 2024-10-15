@@ -1409,7 +1409,7 @@ static struct cmd_handler {
 
 static struct cmd_handler _cmd_handler[X86_DECODE_CMD_LAST];
 
-static void init_cmd_handler(void)
+static void init_cmd_handler()
 {
     int i;
     for (i = 0; i < ARRAY_SIZE(handlers); i++) {
@@ -1481,7 +1481,7 @@ bool exec_instruction(CPUX86State *env, struct x86_decode *ins)
     return true;
 }
 
-void init_emu(void)
+void init_emu()
 {
     init_cmd_handler();
 }

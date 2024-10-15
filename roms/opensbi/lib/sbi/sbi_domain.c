@@ -51,7 +51,7 @@ struct sbi_domain *sbi_hartindex_to_domain(u32 hartindex)
 	return sbi_scratch_read_type(scratch, void *, domain_hart_ptr_offset);
 }
 
-void sbi_update_hartindex_to_domain(u32 hartindex, struct sbi_domain *dom)
+static void update_hartindex_to_domain(u32 hartindex, struct sbi_domain *dom)
 {
 	struct sbi_scratch *scratch;
 
@@ -64,34 +64,20 @@ void sbi_update_hartindex_to_domain(u32 hartindex, struct sbi_domain *dom)
 
 bool sbi_domain_is_assigned_hart(const struct sbi_domain *dom, u32 hartid)
 {
-	bool ret;
-	struct sbi_domain *tdom = (struct sbi_domain *)dom;
+	if (dom)
+		return sbi_hartmask_test_hartid(hartid, &dom->assigned_harts);
 
-	if (!dom)
-		return false;
-
-	spin_lock(&tdom->assigned_harts_lock);
-	ret = sbi_hartmask_test_hartid(hartid, &tdom->assigned_harts);
-	spin_unlock(&tdom->assigned_harts_lock);
-
-	return ret;
+	return false;
 }
 
 ulong sbi_domain_get_assigned_hartmask(const struct sbi_domain *dom,
 				       ulong hbase)
 {
 	ulong ret = 0;
-	struct sbi_domain *tdom = (struct sbi_domain *)dom;
-
-	if (!dom)
-		return 0;
-
-	spin_lock(&tdom->assigned_harts_lock);
 	for (int i = 0; i < 8 * sizeof(ret); i++) {
-		if (sbi_hartmask_test_hartid(hbase + i, &tdom->assigned_harts))
+		if (sbi_domain_is_assigned_hart(dom, hbase + i))
 			ret |= 1UL << i;
 	}
-	spin_unlock(&tdom->assigned_harts_lock);
 
 	return ret;
 }
@@ -569,9 +555,6 @@ int sbi_domain_register(struct sbi_domain *dom,
 	dom->index = domain_count++;
 	domidx_to_domain_table[dom->index] = dom;
 
-	/* Initialize spinlock for dom->assigned_harts */
-	SPIN_LOCK_INIT(dom->assigned_harts_lock);
-
 	/* Clear assigned HARTs of domain */
 	sbi_hartmask_clear_all(&dom->assigned_harts);
 
@@ -584,7 +567,7 @@ int sbi_domain_register(struct sbi_domain *dom,
 		if (tdom)
 			sbi_hartmask_clear_hartindex(i,
 					&tdom->assigned_harts);
-		sbi_update_hartindex_to_domain(i, dom);
+		update_hartindex_to_domain(i, dom);
 		sbi_hartmask_set_hartindex(i, &dom->assigned_harts);
 
 		/*
@@ -718,14 +701,8 @@ int sbi_domain_finalize(struct sbi_scratch *scratch, u32 cold_hartid)
 			continue;
 
 		/* Ignore if boot HART assigned different domain */
-		if (sbi_hartindex_to_domain(dhart) != dom)
-			continue;
-
-		/* Ignore if boot HART is not part of the assigned HARTs */
-		spin_lock(&dom->assigned_harts_lock);
-		rc = sbi_hartmask_test_hartindex(dhart, &dom->assigned_harts);
-		spin_unlock(&dom->assigned_harts_lock);
-		if (!rc)
+		if (sbi_hartindex_to_domain(dhart) != dom ||
+		    !sbi_hartmask_test_hartindex(dhart, &dom->assigned_harts))
 			continue;
 
 		/* Startup boot HART of domain */

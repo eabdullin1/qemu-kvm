@@ -136,7 +136,4 @@ static inline float16 check_nanbox_h(CPURISCVState *env, uint64_t f)
     }
 }
 
-/* Our implementation of CPUClass::has_work */
-bool riscv_cpu_has_work(CPUState *cs);
-
 #endif

@@ -349,6 +349,7 @@ igb_init_net_peer(IGBState *s, PCIDevice *pci_dev, uint8_t *macaddr)
     for (i = 0; i < s->conf.peers.queues; i++) {
         nc = qemu_get_subqueue(s->nic, i);
         qemu_set_vnet_hdr_len(nc->peer, sizeof(struct virtio_net_hdr));
+        qemu_using_vnet_hdr(nc->peer, true);
     }
 }
 
@@ -485,7 +486,7 @@ static void igb_pci_uninit(PCIDevice *pci_dev)
     msi_uninit(pci_dev);
 }
 
-static void igb_qdev_reset_hold(Object *obj, ResetType type)
+static void igb_qdev_reset_hold(Object *obj)
 {
     IGBState *s = IGB(obj);
 

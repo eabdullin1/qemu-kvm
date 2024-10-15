@@ -24,7 +24,6 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu/cutils.h"
 #include "hw/scsi/scsi.h"
 #include "sysemu/block-backend.h"
 #include "scsi/constants.h"
@@ -265,7 +264,7 @@ void ide_atapi_cmd_reply_end(IDEState *s)
                     byte_count_limit--;
                 size = byte_count_limit;
             }
-            s->lcyl = size & 0xff;
+            s->lcyl = size;
             s->hcyl = size >> 8;
             s->elementary_transfer_size = size;
             /* we cannot transmit more than one sector at a time */
@@ -1310,9 +1309,14 @@ void ide_atapi_cmd(IDEState *s)
     trace_ide_atapi_cmd(s, s->io_buffer[0]);
 
     if (trace_event_get_state_backends(TRACE_IDE_ATAPI_CMD_PACKET)) {
-        g_autoptr(GString) str =
-            qemu_hexdump_line(NULL, buf, ATAPI_PACKET_SIZE, 1, 0);
-        trace_ide_atapi_cmd_packet(s, s->lcyl | (s->hcyl << 8), str->str);
+        /* Each pretty-printed byte needs two bytes and a space; */
+        char *ppacket = g_malloc(ATAPI_PACKET_SIZE * 3 + 1);
+        int i;
+        for (i = 0; i < ATAPI_PACKET_SIZE; i++) {
+            sprintf(ppacket + (i * 3), "%02x ", buf[i]);
+        }
+        trace_ide_atapi_cmd_packet(s, s->lcyl | (s->hcyl << 8), ppacket);
+        g_free(ppacket);
     }
 
     /*

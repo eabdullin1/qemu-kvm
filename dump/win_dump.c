@@ -12,6 +12,7 @@
 #include "sysemu/dump.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qapi/qmp/qerror.h"
 #include "exec/cpu-defs.h"
 #include "hw/core/cpu.h"
 #include "qemu/win_dump_defs.h"
@@ -51,7 +52,6 @@ static size_t write_run(uint64_t base_page, uint64_t page_count,
     uint64_t addr = base_page << TARGET_PAGE_BITS;
     uint64_t size = page_count << TARGET_PAGE_BITS;
     uint64_t len, l;
-    int eno;
     size_t total = 0;
 
     while (size) {
@@ -65,10 +65,9 @@ static size_t write_run(uint64_t base_page, uint64_t page_count,
         }
 
         l = qemu_write_full(fd, buf, len);
-        eno = errno;
         cpu_physical_memory_unmap(buf, addr, false, len);
         if (l != len) {
-            error_setg_errno(errp, eno, "win-dump: failed to save memory");
+            error_setg(errp, QERR_IO_ERROR);
             return 0;
         }
 
@@ -460,7 +459,7 @@ void create_win_dump(DumpState *s, Error **errp)
 
     s->written_size = qemu_write_full(s->fd, h, hdr_size);
     if (s->written_size != hdr_size) {
-        error_setg_errno(errp, errno, "win-dump: failed to write header");
+        error_setg(errp, QERR_IO_ERROR);
         goto out_restore;
     }
 

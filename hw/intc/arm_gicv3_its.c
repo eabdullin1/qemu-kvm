@@ -1950,13 +1950,13 @@ static void gicv3_arm_its_realize(DeviceState *dev, Error **errp)
     }
 }
 
-static void gicv3_its_reset_hold(Object *obj, ResetType type)
+static void gicv3_its_reset_hold(Object *obj)
 {
     GICv3ITSState *s = ARM_GICV3_ITS_COMMON(obj);
     GICv3ITSClass *c = ARM_GICV3_ITS_GET_CLASS(s);
 
     if (c->parent_phases.hold) {
-        c->parent_phases.hold(obj, type);
+        c->parent_phases.hold(obj);
     }
 
     /* Quiescent bit reset to 1 */

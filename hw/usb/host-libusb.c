@@ -1212,8 +1212,9 @@ static void usb_host_realize(USBDevice *udev, Error **errp)
     if (s->hostdevice) {
         int fd;
         s->needs_autoscan = false;
-        fd = qemu_open(s->hostdevice, O_RDWR, errp);
+        fd = qemu_open_old(s->hostdevice, O_RDWR);
         if (fd < 0) {
+            error_setg_errno(errp, errno, "failed to open %s", s->hostdevice);
             return;
         }
         rc = usb_host_open(s, NULL, fd);

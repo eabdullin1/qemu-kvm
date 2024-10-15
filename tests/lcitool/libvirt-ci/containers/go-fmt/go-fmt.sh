@@ -2,16 +2,14 @@
 
 GOFMT=$(go env GOROOT)/bin/gofmt
 
-find -name '*.go' | xargs $GOFMT -w
-
-git diff > go-fmt.patch
+find -name '*.go' | xargs $GOFMT -d -e > go-fmt.patch
 
 if test -s go-fmt.patch
 then
     echo
     echo "❌ ERROR: some files failed go fmt code style check"
     echo
-    git diff --stat
+    diffstat go-fmt.patch
     echo
     echo "See the go-fmt patch artifact for full details of mistakes."
     echo

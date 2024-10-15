@@ -56,7 +56,6 @@
 #include "net/filter.h"
 #include "qapi/string-output-visitor.h"
 #include "qapi/qobject-input-visitor.h"
-#include "standard-headers/linux/virtio_net.h"
 
 /* Net bridge is currently not supported for W32. */
 #if !defined(_WIN32)
@@ -530,6 +529,24 @@ bool qemu_has_vnet_hdr_len(NetClientState *nc, int len)
     return nc->info->has_vnet_hdr_len(nc, len);
 }
 
+bool qemu_get_using_vnet_hdr(NetClientState *nc)
+{
+    if (!nc || !nc->info->get_using_vnet_hdr) {
+        return false;
+    }
+
+    return nc->info->get_using_vnet_hdr(nc);
+}
+
+void qemu_using_vnet_hdr(NetClientState *nc, bool enable)
+{
+    if (!nc || !nc->info->using_vnet_hdr) {
+        return;
+    }
+
+    nc->info->using_vnet_hdr(nc, enable);
+}
+
 void qemu_set_offload(NetClientState *nc, int csum, int tso4, int tso6,
                           int ecn, int ufo, int uso4, int uso6)
 {
@@ -542,7 +559,11 @@ void qemu_set_offload(NetClientState *nc, int csum, int tso4, int tso6,
 
 int qemu_get_vnet_hdr_len(NetClientState *nc)
 {
-    return nc->vnet_hdr_len;
+    if (!nc || !nc->info->get_vnet_hdr_len) {
+        return 0;
+    }
+
+    return nc->info->get_vnet_hdr_len(nc);
 }
 
 void qemu_set_vnet_hdr_len(NetClientState *nc, int len)
@@ -550,10 +571,6 @@ void qemu_set_vnet_hdr_len(NetClientState *nc, int len)
     if (!nc || !nc->info->set_vnet_hdr_len) {
         return;
     }
-
-    assert(len == sizeof(struct virtio_net_hdr_mrg_rxbuf) ||
-           len == sizeof(struct virtio_net_hdr) ||
-           len == sizeof(struct virtio_net_hdr_v1_hash));
 
     nc->vnet_hdr_len = len;
     nc->info->set_vnet_hdr_len(nc, len);
@@ -787,7 +804,11 @@ static ssize_t nc_sendv_compat(NetClientState *nc, const struct iovec *iov,
         offset = iov_to_buf(iov, iovcnt, 0, buf, offset);
     }
 
-    ret = nc->info->receive(nc, buffer, offset);
+    if (flags & QEMU_NET_PACKET_FLAG_RAW && nc->info->receive_raw) {
+        ret = nc->info->receive_raw(nc, buffer, offset);
+    } else {
+        ret = nc->info->receive(nc, buffer, offset);
+    }
 
     g_free(buf);
     return ret;
@@ -802,8 +823,6 @@ static ssize_t qemu_deliver_packet_iov(NetClientState *sender,
     MemReentrancyGuard *owned_reentrancy_guard;
     NetClientState *nc = opaque;
     int ret;
-    struct virtio_net_hdr_v1_hash vnet_hdr = { };
-    g_autofree struct iovec *iov_copy = NULL;
 
 
     if (nc->link_down) {
@@ -822,15 +841,7 @@ static ssize_t qemu_deliver_packet_iov(NetClientState *sender,
         owned_reentrancy_guard->engaged_in_io = true;
     }
 
-    if ((flags & QEMU_NET_PACKET_FLAG_RAW) && nc->vnet_hdr_len) {
-        iov_copy = g_new(struct iovec, iovcnt + 1);
-        iov_copy[0].iov_base = &vnet_hdr;
-        iov_copy[0].iov_len =  nc->vnet_hdr_len;
-        memcpy(&iov_copy[1], iov, iovcnt * sizeof(*iov));
-        iov = iov_copy;
-    }
-
-    if (nc->info->receive_iov) {
+    if (nc->info->receive_iov && !(flags & QEMU_NET_PACKET_FLAG_RAW)) {
         ret = nc->info->receive_iov(nc, iov, iovcnt);
     } else {
         ret = nc_sendv_compat(nc, iov, iovcnt, flags);
@@ -1139,21 +1150,6 @@ NICInfo *qemu_find_nic_info(const char *typename, bool match_default,
     return NULL;
 }
 
-static bool is_nic_model_help_option(const char *model)
-{
-    if (model && is_help_option(model)) {
-        /*
-         * Trigger the help output by instantiating the hash table which
-         * will gather tha available models as they get registered.
-         */
-        if (!nic_model_help) {
-            nic_model_help = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                   g_free, NULL);
-        }
-        return true;
-    }
-    return false;
-}
 
 /* "I have created a device. Please configure it if you can" */
 bool qemu_configure_nic_device(DeviceState *dev, bool match_default,
@@ -1737,12 +1733,6 @@ void net_check_clients(void)
 
 static int net_init_client(void *dummy, QemuOpts *opts, Error **errp)
 {
-    const char *model = qemu_opt_get(opts, "model");
-
-    if (is_nic_model_help_option(model)) {
-        return 0;
-    }
-
     return net_client_init(opts, false, errp);
 }
 
@@ -1799,7 +1789,9 @@ static int net_param_nic(void *dummy, QemuOpts *opts, Error **errp)
     memset(ni, 0, sizeof(*ni));
     ni->model = qemu_opt_get_del(opts, "model");
 
-    if (is_nic_model_help_option(ni->model)) {
+    if (!nic_model_help && !g_strcmp0(ni->model, "help")) {
+        nic_model_help = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                               g_free, NULL);
         return 0;
     }
 

@@ -75,7 +75,7 @@ static const char *imx7_src_reg_name(uint32_t reg)
     case SRC_GPR10:
         return "SRC_GPR10";
     default:
-        snprintf(unknown, sizeof(unknown), "%u ?", reg);
+        sprintf(unknown, "%u ?", reg);
         return unknown;
     }
 }

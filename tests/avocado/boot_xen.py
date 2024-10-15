@@ -17,14 +17,9 @@ from avocado_qemu import wait_for_console_pattern
 from boot_linux_console import LinuxKernelTest
 
 
-class BootXen(LinuxKernelTest):
+class BootXenBase(LinuxKernelTest):
     """
     Boots a Xen hypervisor with a Linux DomU kernel.
-
-    :avocado: tags=arch:aarch64
-    :avocado: tags=accel:tcg
-    :avocado: tags=cpu:cortex-a57
-    :avocado: tags=machine:virt
     """
 
     timeout = 90
@@ -50,10 +45,11 @@ class BootXen(LinuxKernelTest):
 
         self.vm.set_console()
 
+        xen_command_line = self.XEN_COMMON_COMMAND_LINE
         self.vm.add_args('-machine', 'virtualization=on',
                          '-m', '768',
                          '-kernel', xen_path,
-                         '-append', self.XEN_COMMON_COMMAND_LINE,
+                         '-append', xen_command_line,
                          '-device',
                          'guest-loader,addr=0x47000000,kernel=%s,bootargs=console=hvc0'
                          % (kernel_path))
@@ -63,7 +59,17 @@ class BootXen(LinuxKernelTest):
         console_pattern = 'VFS: Cannot open root device'
         wait_for_console_pattern(self, console_pattern, "Panic on CPU 0:")
 
+
+class BootXen(BootXenBase):
+
     def test_arm64_xen_411_and_dom0(self):
+        """
+        :avocado: tags=arch:aarch64
+        :avocado: tags=accel:tcg
+        :avocado: tags=cpu:cortex-a57
+        :avocado: tags=machine:virt
+        """
+
         # archive of file from https://deb.debian.org/debian/pool/main/x/xen/
         xen_url = ('https://fileserver.linaro.org/s/JSsewXGZ6mqxPr5/'
                    'download?path=%2F&files='
@@ -75,6 +81,13 @@ class BootXen(LinuxKernelTest):
         self.launch_xen(xen_path)
 
     def test_arm64_xen_414_and_dom0(self):
+        """
+        :avocado: tags=arch:aarch64
+        :avocado: tags=accel:tcg
+        :avocado: tags=cpu:cortex-a57
+        :avocado: tags=machine:virt
+        """
+
         # archive of file from https://deb.debian.org/debian/pool/main/x/xen/
         xen_url = ('https://fileserver.linaro.org/s/JSsewXGZ6mqxPr5/'
                    'download?path=%2F&files='
@@ -86,6 +99,13 @@ class BootXen(LinuxKernelTest):
         self.launch_xen(xen_path)
 
     def test_arm64_xen_415_and_dom0(self):
+        """
+        :avocado: tags=arch:aarch64
+        :avocado: tags=accel:tcg
+        :avocado: tags=cpu:cortex-a57
+        :avocado: tags=machine:virt
+        """
+
         xen_url = ('https://fileserver.linaro.org/'
                    's/JSsewXGZ6mqxPr5/download'
                    '?path=%2F&files=xen-upstream-4.15-unstable.deb')

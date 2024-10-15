@@ -13,7 +13,6 @@
 
 #include "hw/boards.h"
 #include "qom/object.h"
-#include "hw/s390x/sclp.h"
 
 #define TYPE_S390_CCW_MACHINE               "s390-ccw-machine"
 
@@ -29,8 +28,6 @@ struct S390CcwMachineState {
     bool dea_key_wrap;
     bool pv;
     uint8_t loadparm[8];
-
-    SCLPDevice *sclp;
 };
 
 #define S390_PTF_REASON_NONE (0x00 << 8)
@@ -46,6 +43,7 @@ struct S390CcwMachineClass {
     /*< public >*/
     bool ri_allowed;
     bool cpu_model_allowed;
+    bool css_migration_enabled;
     bool hpage_1m_allowed;
     int max_threads;
 };
@@ -56,5 +54,11 @@ bool ri_allowed(void);
 bool cpu_model_allowed(void);
 /* 1M huge page mappings allowed by the machine */
 bool hpage_1m_allowed(void);
+
+/**
+ * Returns true if (vmstate based) migration of the channel subsystem
+ * is enabled, false if it is disabled.
+ */
+bool css_migration_enabled(void);
 
 #endif

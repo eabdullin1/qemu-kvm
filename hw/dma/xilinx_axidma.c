@@ -36,7 +36,6 @@
 #include "sysemu/dma.h"
 #include "hw/stream.h"
 #include "qom/object.h"
-#include "trace.h"
 
 #define D(x)
 
@@ -72,11 +71,8 @@ enum {
 enum {
     DMASR_HALTED = 1,
     DMASR_IDLE  = 2,
-    DMASR_SLVERR = 1 << 5,
-    DMASR_DECERR = 1 << 6,
     DMASR_IOC_IRQ  = 1 << 12,
     DMASR_DLY_IRQ  = 1 << 13,
-    DMASR_ERR_IRQ  = 1 << 14,
 
     DMASR_IRQ_MASK = 7 << 12
 };
@@ -194,34 +190,17 @@ static inline int streamid_from_addr(hwaddr addr)
     return sid;
 }
 
-static MemTxResult stream_desc_load(struct Stream *s, hwaddr addr)
+static void stream_desc_load(struct Stream *s, hwaddr addr)
 {
     struct SDesc *d = &s->desc;
 
-    MemTxResult result = address_space_read(&s->dma->as,
-                                            addr, MEMTXATTRS_UNSPECIFIED,
-                                            d, sizeof *d);
-    if (result != MEMTX_OK) {
-        trace_xilinx_axidma_loading_desc_fail(result);
-
-        if (result == MEMTX_DECODE_ERROR) {
-            s->regs[R_DMASR] |= DMASR_DECERR;
-        } else {
-            s->regs[R_DMASR] |= DMASR_SLVERR;
-        }
-
-        s->regs[R_DMACR] &= ~DMACR_RUNSTOP;
-        s->regs[R_DMASR] |= DMASR_HALTED;
-        s->regs[R_DMASR] |= DMASR_ERR_IRQ;
-        return result;
-    }
+    address_space_read(&s->dma->as, addr, MEMTXATTRS_UNSPECIFIED, d, sizeof *d);
 
     /* Convert from LE into host endianness.  */
     d->buffer_address = le64_to_cpu(d->buffer_address);
     d->nxtdesc = le64_to_cpu(d->nxtdesc);
     d->control = le32_to_cpu(d->control);
     d->status = le32_to_cpu(d->status);
-    return result;
 }
 
 static void stream_desc_store(struct Stream *s, hwaddr addr)
@@ -300,9 +279,7 @@ static void stream_process_mem2s(struct Stream *s, StreamSink *tx_data_dev,
     }
 
     while (1) {
-        if (MEMTX_OK != stream_desc_load(s, s->regs[R_CURDESC])) {
-            break;
-        }
+        stream_desc_load(s, s->regs[R_CURDESC]);
 
         if (s->desc.status & SDESC_STATUS_COMPLETE) {
             s->regs[R_DMASR] |= DMASR_HALTED;
@@ -359,9 +336,7 @@ static size_t stream_process_s2mem(struct Stream *s, unsigned char *buf,
     }
 
     while (len) {
-        if (MEMTX_OK != stream_desc_load(s, s->regs[R_CURDESC])) {
-            break;
-        }
+        stream_desc_load(s, s->regs[R_CURDESC]);
 
         if (s->desc.status & SDESC_STATUS_COMPLETE) {
             s->regs[R_DMASR] |= DMASR_HALTED;
@@ -626,7 +601,7 @@ static void axidma_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    dc->realize = xilinx_axidma_realize;
+    dc->realize = xilinx_axidma_realize,
     dc->reset = xilinx_axidma_reset;
     device_class_set_props(dc, axidma_properties);
 }

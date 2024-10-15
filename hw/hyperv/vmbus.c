@@ -2453,7 +2453,7 @@ static void vmbus_unrealize(BusState *bus)
     qemu_mutex_destroy(&vmbus->rx_queue_lock);
 }
 
-static void vmbus_reset_hold(Object *obj, ResetType type)
+static void vmbus_reset_hold(Object *obj)
 {
     vmbus_deinit(VMBUS(obj));
 }

@@ -52,7 +52,6 @@ qapi_all_modules = [
   'stats',
   'trace',
   'transaction',
-  'vfio',
   'virtio',
   'yank',
 ]
@@ -63,6 +62,7 @@ if have_system
     'cryptodev',
     'qdev',
     'pci',
+    'rdma',
     'rocker',
     'tpm',
   ]

@@ -21,7 +21,6 @@
 
 #include "cpu.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "exec/log.h"
 
 #if !defined(CONFIG_USER_ONLY)
@@ -187,7 +186,7 @@ void superh_cpu_do_interrupt(CPUState *cs)
 
 static void update_itlb_use(CPUSH4State * env, int itlbnb)
 {
-    uint32_t or_mask = 0, and_mask = 0xff;
+    uint8_t or_mask = 0, and_mask = (uint8_t) - 1;
 
     switch (itlbnb) {
     case 0:

@@ -110,14 +110,11 @@ static void
 dbus_gl_scanout_dmabuf(DisplayChangeListener *dcl,
                        QemuDmaBuf *dmabuf)
 {
-    uint32_t width, height;
-
     DBusDisplayConsole *ddc = container_of(dcl, DBusDisplayConsole, dcl);
 
-    width = qemu_dmabuf_get_width(dmabuf);
-    height = qemu_dmabuf_get_height(dmabuf);
-
-    dbus_display_console_set_size(ddc, width, height);
+    dbus_display_console_set_size(ddc,
+                                  dmabuf->width,
+                                  dmabuf->height);
 }
 
 static void

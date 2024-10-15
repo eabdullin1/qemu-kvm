@@ -1,12 +1,9 @@
 # Default configuration for arm-softmmu
 
-# Uncomment the following lines to disable these optional devices:
-# CONFIG_I2C_DEVICES=n
 # CONFIG_PCI_DEVICES=n
 # CONFIG_TEST_DEVICES=n
 
-# Boards are selected by default, uncomment to keep out of the build.
-# CONFIG_ARM_VIRT=n
+CONFIG_ARM_VIRT=y
 
 # These are selected by default when TCG is enabled, uncomment them to
 # keep out of the build.

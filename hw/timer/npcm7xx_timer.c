@@ -592,7 +592,7 @@ static void npcm7xx_watchdog_timer_expired(void *opaque)
     }
 }
 
-static void npcm7xx_timer_hold_reset(Object *obj, ResetType type)
+static void npcm7xx_timer_hold_reset(Object *obj)
 {
     NPCM7xxTimerCtrlState *s = NPCM7XX_TIMER(obj);
     int i;

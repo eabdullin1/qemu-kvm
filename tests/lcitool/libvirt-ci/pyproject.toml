@@ -25,7 +25,6 @@ classifiers = [
 
 dependencies = [
     "PyYAML",
-    "requests",
 ]
 
 [project.urls]

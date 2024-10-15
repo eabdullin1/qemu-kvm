@@ -29,6 +29,7 @@ struct XenDevOps {
                                  const char *node);
     void      (*frontend_changed)(struct XenLegacyDevice *xendev,
                                   const char *node);
+    int       (*backend_register)(void);
 };
 
 struct XenLegacyDevice {
@@ -52,7 +53,7 @@ struct XenLegacyDevice {
     xenevtchn_handle   *evtchndev;
     xengnttab_handle   *gnttabdev;
 
-    const struct XenDevOps *ops;
+    struct XenDevOps   *ops;
     QTAILQ_ENTRY(XenLegacyDevice) next;
 };
 

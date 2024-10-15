@@ -18,7 +18,7 @@ native:
 - automake
 - awk
 - bash
-- bash-completion-devel
+- bash-completion
 - bc
 - bison
 - brlapi-devel
@@ -223,7 +223,6 @@ native:
 - python3-docutils
 - python3-flake8
 - python3-gobject
-- python3-libnbd
 - python3-libxml2
 - python3-lxml
 - python3-numpy
@@ -289,5 +288,4 @@ native:
 - zlib-devel-static
 - zstd
 pypi:
-- black
 - build

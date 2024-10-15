@@ -20,7 +20,6 @@
 
 #include "qemu/osdep.h"
 #include "gdbstub/helpers.h"
-#include "cpu.h"
 
 int avr_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
 {

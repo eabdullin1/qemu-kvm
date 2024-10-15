@@ -785,8 +785,7 @@ static void expand_3_i32(uint32_t dofs, uint32_t aofs,
 }
 
 static void expand_3i_i32(uint32_t dofs, uint32_t aofs, uint32_t bofs,
-                          uint32_t oprsz, int32_t c,
-                          bool load_dest, bool write_aofs,
+                          uint32_t oprsz, int32_t c, bool load_dest,
                           void (*fni)(TCGv_i32, TCGv_i32, TCGv_i32, int32_t))
 {
     TCGv_i32 t0 = tcg_temp_new_i32();
@@ -802,9 +801,6 @@ static void expand_3i_i32(uint32_t dofs, uint32_t aofs, uint32_t bofs,
         }
         fni(t2, t0, t1, c);
         tcg_gen_st_i32(t2, tcg_env, dofs + i);
-        if (write_aofs) {
-            tcg_gen_st_i32(t0, tcg_env, aofs + i);
-        }
     }
     tcg_temp_free_i32(t0);
     tcg_temp_free_i32(t1);
@@ -948,8 +944,7 @@ static void expand_3_i64(uint32_t dofs, uint32_t aofs,
 }
 
 static void expand_3i_i64(uint32_t dofs, uint32_t aofs, uint32_t bofs,
-                          uint32_t oprsz, int64_t c,
-                          bool load_dest, bool write_aofs,
+                          uint32_t oprsz, int64_t c, bool load_dest,
                           void (*fni)(TCGv_i64, TCGv_i64, TCGv_i64, int64_t))
 {
     TCGv_i64 t0 = tcg_temp_new_i64();
@@ -965,9 +960,6 @@ static void expand_3i_i64(uint32_t dofs, uint32_t aofs, uint32_t bofs,
         }
         fni(t2, t0, t1, c);
         tcg_gen_st_i64(t2, tcg_env, dofs + i);
-        if (write_aofs) {
-            tcg_gen_st_i64(t0, tcg_env, aofs + i);
-        }
     }
     tcg_temp_free_i64(t0);
     tcg_temp_free_i64(t1);
@@ -1110,8 +1102,7 @@ static void expand_3_vec(unsigned vece, uint32_t dofs, uint32_t aofs,
  */
 static void expand_3i_vec(unsigned vece, uint32_t dofs, uint32_t aofs,
                           uint32_t bofs, uint32_t oprsz, uint32_t tysz,
-                          TCGType type, int64_t c,
-                          bool load_dest, bool write_aofs,
+                          TCGType type, int64_t c, bool load_dest,
                           void (*fni)(unsigned, TCGv_vec, TCGv_vec, TCGv_vec,
                                       int64_t))
 {
@@ -1127,9 +1118,6 @@ static void expand_3i_vec(unsigned vece, uint32_t dofs, uint32_t aofs,
         }
         fni(vece, t2, t0, t1, c);
         tcg_gen_st_vec(t2, tcg_env, dofs + i);
-        if (write_aofs) {
-            tcg_gen_st_vec(t0, tcg_env, aofs + i);
-        }
     }
 }
 
@@ -1483,7 +1471,7 @@ void tcg_gen_gvec_3i(uint32_t dofs, uint32_t aofs, uint32_t bofs,
          */
         some = QEMU_ALIGN_DOWN(oprsz, 32);
         expand_3i_vec(g->vece, dofs, aofs, bofs, some, 32, TCG_TYPE_V256,
-                      c, g->load_dest, g->write_aofs, g->fniv);
+                      c, g->load_dest, g->fniv);
         if (some == oprsz) {
             break;
         }
@@ -1495,20 +1483,18 @@ void tcg_gen_gvec_3i(uint32_t dofs, uint32_t aofs, uint32_t bofs,
         /* fallthru */
     case TCG_TYPE_V128:
         expand_3i_vec(g->vece, dofs, aofs, bofs, oprsz, 16, TCG_TYPE_V128,
-                      c, g->load_dest, g->write_aofs, g->fniv);
+                      c, g->load_dest, g->fniv);
         break;
     case TCG_TYPE_V64:
         expand_3i_vec(g->vece, dofs, aofs, bofs, oprsz, 8, TCG_TYPE_V64,
-                      c, g->load_dest, g->write_aofs, g->fniv);
+                      c, g->load_dest, g->fniv);
         break;
 
     case 0:
         if (g->fni8 && check_size_impl(oprsz, 8)) {
-            expand_3i_i64(dofs, aofs, bofs, oprsz, c,
-                          g->load_dest, g->write_aofs, g->fni8);
+            expand_3i_i64(dofs, aofs, bofs, oprsz, c, g->load_dest, g->fni8);
         } else if (g->fni4 && check_size_impl(oprsz, 4)) {
-            expand_3i_i32(dofs, aofs, bofs, oprsz, c,
-                          g->load_dest, g->write_aofs, g->fni4);
+            expand_3i_i32(dofs, aofs, bofs, oprsz, c, g->load_dest, g->fni4);
         } else {
             assert(g->fno != NULL);
             tcg_gen_gvec_3_ool(dofs, aofs, bofs, oprsz, maxsz, c, g->fno);

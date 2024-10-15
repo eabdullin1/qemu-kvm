@@ -32,14 +32,8 @@ struct QCryptoBlock {
     const QCryptoBlockDriver *driver;
     void *opaque;
 
-    /* Cipher parameters */
-    QCryptoCipherAlgorithm alg;
-    QCryptoCipherMode mode;
-    uint8_t *key;
-    size_t nkey;
-
-    QCryptoCipher **free_ciphers;
-    size_t max_free_ciphers;
+    QCryptoCipher **ciphers;
+    size_t n_ciphers;
     size_t n_free_ciphers;
     QCryptoIVGen *ivgen;
     QemuMutex mutex;
@@ -59,6 +53,7 @@ struct QCryptoBlockDriver {
                 QCryptoBlockReadFunc readfunc,
                 void *opaque,
                 unsigned int flags,
+                size_t n_threads,
                 Error **errp);
 
     int (*create)(QCryptoBlock *block,
@@ -135,7 +130,7 @@ int qcrypto_block_init_cipher(QCryptoBlock *block,
                               QCryptoCipherAlgorithm alg,
                               QCryptoCipherMode mode,
                               const uint8_t *key, size_t nkey,
-                              Error **errp);
+                              size_t n_threads, Error **errp);
 
 void qcrypto_block_free_cipher(QCryptoBlock *block);
 

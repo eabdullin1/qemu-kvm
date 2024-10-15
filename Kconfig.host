@@ -23,9 +23,6 @@ config IVSHMEM
 config TPM
     bool
 
-config FDT
-    bool
-
 config VHOST_USER
     bool
 
@@ -36,6 +33,9 @@ config VHOST_KERNEL
     bool
 
 config VIRTFS
+    bool
+
+config PVRDMA
     bool
 
 config MULTIPROCESS_ALLOWED

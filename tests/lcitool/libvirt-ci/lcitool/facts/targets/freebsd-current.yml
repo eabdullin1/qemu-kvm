@@ -2,7 +2,6 @@
 os:
   name: 'FreeBSD'
   version: 'Current'
-  stable: false
 
 packaging:
   format: 'pkg'

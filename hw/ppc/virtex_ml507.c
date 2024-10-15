@@ -25,7 +25,6 @@
 #include "qemu/osdep.h"
 #include "qemu/datadir.h"
 #include "qemu/units.h"
-#include "exec/page-protection.h"
 #include "cpu.h"
 #include "hw/sysbus.h"
 #include "hw/char/serial.h"

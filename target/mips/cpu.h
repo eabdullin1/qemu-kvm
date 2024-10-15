@@ -10,6 +10,8 @@
 #include "hw/clock.h"
 #include "mips-defs.h"
 
+#define TCG_GUEST_DEFAULT_MO (0)
+
 typedef struct CPUMIPSTLBContext CPUMIPSTLBContext;
 
 /* MSA Context */

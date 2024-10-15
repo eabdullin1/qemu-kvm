@@ -24,7 +24,6 @@
 #include "migration/register.h"
 #include "migration/blocker.h"
 #include "qapi/error.h"
-#include "qapi/qapi-events-vfio.h"
 #include "exec/ramlist.h"
 #include "exec/ram_addr.h"
 #include "pci.h"
@@ -81,65 +80,9 @@ static const char *mig_state_to_str(enum vfio_device_mig_state state)
     }
 }
 
-static VfioMigrationState
-mig_state_to_qapi_state(enum vfio_device_mig_state state)
-{
-    switch (state) {
-    case VFIO_DEVICE_STATE_STOP:
-        return QAPI_VFIO_MIGRATION_STATE_STOP;
-    case VFIO_DEVICE_STATE_RUNNING:
-        return QAPI_VFIO_MIGRATION_STATE_RUNNING;
-    case VFIO_DEVICE_STATE_STOP_COPY:
-        return QAPI_VFIO_MIGRATION_STATE_STOP_COPY;
-    case VFIO_DEVICE_STATE_RESUMING:
-        return QAPI_VFIO_MIGRATION_STATE_RESUMING;
-    case VFIO_DEVICE_STATE_RUNNING_P2P:
-        return QAPI_VFIO_MIGRATION_STATE_RUNNING_P2P;
-    case VFIO_DEVICE_STATE_PRE_COPY:
-        return QAPI_VFIO_MIGRATION_STATE_PRE_COPY;
-    case VFIO_DEVICE_STATE_PRE_COPY_P2P:
-        return QAPI_VFIO_MIGRATION_STATE_PRE_COPY_P2P;
-    default:
-        g_assert_not_reached();
-    }
-}
-
-static void vfio_migration_send_event(VFIODevice *vbasedev)
-{
-    VFIOMigration *migration = vbasedev->migration;
-    DeviceState *dev = vbasedev->dev;
-    g_autofree char *qom_path = NULL;
-    Object *obj;
-
-    if (!vbasedev->migration_events) {
-        return;
-    }
-
-    g_assert(vbasedev->ops->vfio_get_object);
-    obj = vbasedev->ops->vfio_get_object(vbasedev);
-    g_assert(obj);
-    qom_path = object_get_canonical_path(obj);
-
-    qapi_event_send_vfio_migration(
-        dev->id, qom_path, mig_state_to_qapi_state(migration->device_state));
-}
-
-static void vfio_migration_set_device_state(VFIODevice *vbasedev,
-                                            enum vfio_device_mig_state state)
-{
-    VFIOMigration *migration = vbasedev->migration;
-
-    trace_vfio_migration_set_device_state(vbasedev->name,
-                                          mig_state_to_str(state));
-
-    migration->device_state = state;
-    vfio_migration_send_event(vbasedev);
-}
-
 static int vfio_migration_set_state(VFIODevice *vbasedev,
                                     enum vfio_device_mig_state new_state,
-                                    enum vfio_device_mig_state recover_state,
-                                    Error **errp)
+                                    enum vfio_device_mig_state recover_state)
 {
     VFIOMigration *migration = vbasedev->migration;
     uint64_t buf[DIV_ROUND_UP(sizeof(struct vfio_device_feature) +
@@ -149,16 +92,6 @@ static int vfio_migration_set_state(VFIODevice *vbasedev,
     struct vfio_device_feature_mig_state *mig_state =
         (struct vfio_device_feature_mig_state *)feature->data;
     int ret;
-    g_autofree char *error_prefix =
-        g_strdup_printf("%s: Failed setting device state to %s.",
-                        vbasedev->name, mig_state_to_str(new_state));
-
-    trace_vfio_migration_set_state(vbasedev->name, mig_state_to_str(new_state),
-                                   mig_state_to_str(recover_state));
-
-    if (new_state == migration->device_state) {
-        return 0;
-    }
 
     feature->argsz = sizeof(buf);
     feature->flags =
@@ -169,24 +102,22 @@ static int vfio_migration_set_state(VFIODevice *vbasedev,
         ret = -errno;
 
         if (recover_state == VFIO_DEVICE_STATE_ERROR) {
-            error_setg_errno(errp, errno,
-                             "%s Recover state is ERROR. Resetting device",
-                             error_prefix);
+            error_report("%s: Failed setting device state to %s, err: %s. "
+                         "Recover state is ERROR. Resetting device",
+                         vbasedev->name, mig_state_to_str(new_state),
+                         strerror(errno));
 
             goto reset_device;
         }
 
-        error_setg_errno(errp, errno,
-                         "%s Setting device in recover state %s",
-                         error_prefix, mig_state_to_str(recover_state));
+        error_report(
+            "%s: Failed setting device state to %s, err: %s. Setting device in recover state %s",
+                     vbasedev->name, mig_state_to_str(new_state),
+                     strerror(errno), mig_state_to_str(recover_state));
 
         mig_state->device_state = recover_state;
         if (ioctl(vbasedev->fd, VFIO_DEVICE_FEATURE, feature)) {
             ret = -errno;
-            /*
-             * If setting the device in recover state fails, report
-             * the error here and propagate the first error.
-             */
             error_report(
                 "%s: Failed setting device in recover state, err: %s. Resetting device",
                          vbasedev->name, strerror(errno));
@@ -194,19 +125,19 @@ static int vfio_migration_set_state(VFIODevice *vbasedev,
             goto reset_device;
         }
 
-        vfio_migration_set_device_state(vbasedev, recover_state);
+        migration->device_state = recover_state;
 
         return ret;
     }
 
-    vfio_migration_set_device_state(vbasedev, new_state);
+    migration->device_state = new_state;
     if (mig_state->data_fd != -1) {
         if (migration->data_fd != -1) {
             /*
              * This can happen if the device is asynchronously reset and
              * terminates a data transfer.
              */
-            error_setg(errp, "%s: data_fd out of sync", vbasedev->name);
+            error_report("%s: data_fd out of sync", vbasedev->name);
             close(mig_state->data_fd);
 
             return -EBADF;
@@ -214,6 +145,8 @@ static int vfio_migration_set_state(VFIODevice *vbasedev,
 
         migration->data_fd = mig_state->data_fd;
     }
+
+    trace_vfio_migration_set_state(vbasedev->name, mig_state_to_str(new_state));
 
     return 0;
 
@@ -223,7 +156,7 @@ reset_device:
                  strerror(errno));
     }
 
-    vfio_migration_set_device_state(vbasedev, VFIO_DEVICE_STATE_RUNNING);
+    migration->device_state = VFIO_DEVICE_STATE_RUNNING;
 
     return ret;
 }
@@ -235,11 +168,10 @@ reset_device:
  */
 static int
 vfio_migration_set_state_or_reset(VFIODevice *vbasedev,
-                                  enum vfio_device_mig_state new_state,
-                                  Error **errp)
+                                  enum vfio_device_mig_state new_state)
 {
     return vfio_migration_set_state(vbasedev, new_state,
-                                    VFIO_DEVICE_STATE_ERROR, errp);
+                                    VFIO_DEVICE_STATE_ERROR);
 }
 
 static int vfio_load_buffer(QEMUFile *f, VFIODevice *vbasedev,
@@ -254,30 +186,21 @@ static int vfio_load_buffer(QEMUFile *f, VFIODevice *vbasedev,
     return ret;
 }
 
-static int vfio_save_device_config_state(QEMUFile *f, void *opaque,
-                                         Error **errp)
+static int vfio_save_device_config_state(QEMUFile *f, void *opaque)
 {
     VFIODevice *vbasedev = opaque;
-    int ret;
 
     qemu_put_be64(f, VFIO_MIG_FLAG_DEV_CONFIG_STATE);
 
     if (vbasedev->ops && vbasedev->ops->vfio_save_config) {
-        ret = vbasedev->ops->vfio_save_config(vbasedev, f, errp);
-        if (ret) {
-            return ret;
-        }
+        vbasedev->ops->vfio_save_config(vbasedev, f);
     }
 
     qemu_put_be64(f, VFIO_MIG_FLAG_END_OF_STATE);
 
     trace_vfio_save_device_config_state(vbasedev->name);
 
-    ret = qemu_file_get_error(f);
-    if (ret < 0) {
-        error_setg_errno(errp, -ret, "Failed to save state");
-    }
-    return ret;
+    return qemu_file_get_error(f);
 }
 
 static int vfio_load_device_config_state(QEMUFile *f, void *opaque)
@@ -453,12 +376,11 @@ static int vfio_save_prepare(void *opaque, Error **errp)
     return 0;
 }
 
-static int vfio_save_setup(QEMUFile *f, void *opaque, Error **errp)
+static int vfio_save_setup(QEMUFile *f, void *opaque)
 {
     VFIODevice *vbasedev = opaque;
     VFIOMigration *migration = vbasedev->migration;
     uint64_t stop_copy_size = VFIO_MIG_DEFAULT_DATA_BUFFER_SIZE;
-    int ret;
 
     qemu_put_be64(f, VFIO_MIG_FLAG_DEV_SETUP_STATE);
 
@@ -467,16 +389,18 @@ static int vfio_save_setup(QEMUFile *f, void *opaque, Error **errp)
                                       stop_copy_size);
     migration->data_buffer = g_try_malloc0(migration->data_buffer_size);
     if (!migration->data_buffer) {
-        error_setg(errp, "%s: Failed to allocate migration data buffer",
-                   vbasedev->name);
+        error_report("%s: Failed to allocate migration data buffer",
+                     vbasedev->name);
         return -ENOMEM;
     }
 
     if (vfio_precopy_supported(vbasedev)) {
+        int ret;
+
         switch (migration->device_state) {
         case VFIO_DEVICE_STATE_RUNNING:
             ret = vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_PRE_COPY,
-                                           VFIO_DEVICE_STATE_RUNNING, errp);
+                                           VFIO_DEVICE_STATE_RUNNING);
             if (ret) {
                 return ret;
             }
@@ -488,8 +412,6 @@ static int vfio_save_setup(QEMUFile *f, void *opaque, Error **errp)
             /* vfio_save_complete_precopy() will go to STOP_COPY */
             break;
         default:
-            error_setg(errp, "%s: Invalid device state %d", vbasedev->name,
-                       migration->device_state);
             return -EINVAL;
         }
     }
@@ -498,32 +420,20 @@ static int vfio_save_setup(QEMUFile *f, void *opaque, Error **errp)
 
     qemu_put_be64(f, VFIO_MIG_FLAG_END_OF_STATE);
 
-    ret = qemu_file_get_error(f);
-    if (ret < 0) {
-        error_setg_errno(errp, -ret, "%s: save setup failed", vbasedev->name);
-    }
-
-    return ret;
+    return qemu_file_get_error(f);
 }
 
 static void vfio_save_cleanup(void *opaque)
 {
     VFIODevice *vbasedev = opaque;
     VFIOMigration *migration = vbasedev->migration;
-    Error *local_err = NULL;
-    int ret;
 
     /*
      * Changing device state from STOP_COPY to STOP can take time. Do it here,
      * after migration has completed, so it won't increase downtime.
      */
     if (migration->device_state == VFIO_DEVICE_STATE_STOP_COPY) {
-        ret = vfio_migration_set_state_or_reset(vbasedev,
-                                                VFIO_DEVICE_STATE_STOP,
-                                                &local_err);
-        if (ret) {
-            error_report_err(local_err);
-        }
+        vfio_migration_set_state_or_reset(vbasedev, VFIO_DEVICE_STATE_STOP);
     }
 
     g_free(migration->data_buffer);
@@ -631,13 +541,11 @@ static int vfio_save_complete_precopy(QEMUFile *f, void *opaque)
     VFIODevice *vbasedev = opaque;
     ssize_t data_size;
     int ret;
-    Error *local_err = NULL;
 
     /* We reach here with device state STOP or STOP_COPY only */
     ret = vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_STOP_COPY,
-                                   VFIO_DEVICE_STATE_STOP, &local_err);
+                                   VFIO_DEVICE_STATE_STOP);
     if (ret) {
-        error_report_err(local_err);
         return ret;
     }
 
@@ -650,6 +558,9 @@ static int vfio_save_complete_precopy(QEMUFile *f, void *opaque)
 
     qemu_put_be64(f, VFIO_MIG_FLAG_END_OF_STATE);
     ret = qemu_file_get_error(f);
+    if (ret) {
+        return ret;
+    }
 
     trace_vfio_save_complete_precopy(vbasedev->name, ret);
 
@@ -659,24 +570,22 @@ static int vfio_save_complete_precopy(QEMUFile *f, void *opaque)
 static void vfio_save_state(QEMUFile *f, void *opaque)
 {
     VFIODevice *vbasedev = opaque;
-    Error *local_err = NULL;
     int ret;
 
-    ret = vfio_save_device_config_state(f, opaque, &local_err);
+    ret = vfio_save_device_config_state(f, opaque);
     if (ret) {
-        error_prepend(&local_err,
-                      "vfio: Failed to save device config space of %s - ",
-                      vbasedev->name);
-        qemu_file_set_error_obj(f, ret, local_err);
+        error_report("%s: Failed to save device config space",
+                     vbasedev->name);
+        qemu_file_set_error(f, ret);
     }
 }
 
-static int vfio_load_setup(QEMUFile *f, void *opaque, Error **errp)
+static int vfio_load_setup(QEMUFile *f, void *opaque)
 {
     VFIODevice *vbasedev = opaque;
 
     return vfio_migration_set_state(vbasedev, VFIO_DEVICE_STATE_RESUMING,
-                                    vbasedev->migration->device_state, errp);
+                                   vbasedev->migration->device_state);
 }
 
 static int vfio_load_cleanup(void *opaque)
@@ -792,20 +701,19 @@ static void vfio_vmstate_change_prepare(void *opaque, bool running,
     VFIODevice *vbasedev = opaque;
     VFIOMigration *migration = vbasedev->migration;
     enum vfio_device_mig_state new_state;
-    Error *local_err = NULL;
     int ret;
 
     new_state = migration->device_state == VFIO_DEVICE_STATE_PRE_COPY ?
                     VFIO_DEVICE_STATE_PRE_COPY_P2P :
                     VFIO_DEVICE_STATE_RUNNING_P2P;
 
-    ret = vfio_migration_set_state_or_reset(vbasedev, new_state, &local_err);
+    ret = vfio_migration_set_state_or_reset(vbasedev, new_state);
     if (ret) {
         /*
          * Migration should be aborted in this case, but vm_state_notify()
          * currently does not support reporting failures.
          */
-        migration_file_set_error(ret, local_err);
+        migration_file_set_error(ret);
     }
 
     trace_vfio_vmstate_change_prepare(vbasedev->name, running,
@@ -817,7 +725,6 @@ static void vfio_vmstate_change(void *opaque, bool running, RunState state)
 {
     VFIODevice *vbasedev = opaque;
     enum vfio_device_mig_state new_state;
-    Error *local_err = NULL;
     int ret;
 
     if (running) {
@@ -830,13 +737,13 @@ static void vfio_vmstate_change(void *opaque, bool running, RunState state)
                 VFIO_DEVICE_STATE_STOP;
     }
 
-    ret = vfio_migration_set_state_or_reset(vbasedev, new_state, &local_err);
+    ret = vfio_migration_set_state_or_reset(vbasedev, new_state);
     if (ret) {
         /*
          * Migration should be aborted in this case, but vm_state_notify()
          * currently does not support reporting failures.
          */
-        migration_file_set_error(ret, local_err);
+        migration_file_set_error(ret);
     }
 
     trace_vfio_vmstate_change(vbasedev->name, running, RunState_str(state),
@@ -849,23 +756,11 @@ static int vfio_migration_state_notifier(NotifierWithReturn *notifier,
     VFIOMigration *migration = container_of(notifier, VFIOMigration,
                                             migration_state);
     VFIODevice *vbasedev = migration->vbasedev;
-    Error *local_err = NULL;
-    int ret;
 
     trace_vfio_migration_state_notifier(vbasedev->name, e->type);
 
     if (e->type == MIG_EVENT_PRECOPY_FAILED) {
-        /*
-         * MigrationNotifyFunc may not return an error code and an Error
-         * object for MIG_EVENT_PRECOPY_FAILED. Hence, report the error
-         * locally and ignore the errp argument.
-         */
-        ret = vfio_migration_set_state_or_reset(vbasedev,
-                                                VFIO_DEVICE_STATE_RUNNING,
-                                                &local_err);
-        if (ret) {
-            error_report_err(local_err);
-        }
+        vfio_migration_set_state_or_reset(vbasedev, VFIO_DEVICE_STATE_RUNNING);
     }
     return 0;
 }
@@ -1036,18 +931,16 @@ bool vfio_migration_realize(VFIODevice *vbasedev, Error **errp)
         return !vfio_block_migration(vbasedev, err, errp);
     }
 
-    if ((!vbasedev->dirty_pages_supported ||
-         vbasedev->device_dirty_page_tracking == ON_OFF_AUTO_OFF) &&
-        !vbasedev->iommu_dirty_tracking) {
+    if (!vbasedev->dirty_pages_supported) {
         if (vbasedev->enable_migration == ON_OFF_AUTO_AUTO) {
             error_setg(&err,
-                       "%s: VFIO device doesn't support device and "
-                       "IOMMU dirty tracking", vbasedev->name);
+                       "%s: VFIO device doesn't support device dirty tracking",
+                       vbasedev->name);
             goto add_blocker;
         }
 
-        warn_report("%s: VFIO device doesn't support device and "
-                    "IOMMU dirty tracking", vbasedev->name);
+        warn_report("%s: VFIO device doesn't support device dirty tracking",
+                    vbasedev->name);
     }
 
     ret = vfio_block_multiple_devices_migration(vbasedev, errp);

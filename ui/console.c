@@ -49,8 +49,7 @@ typedef struct QemuGraphicConsole {
     uint32_t head;
 
     QEMUCursor *cursor;
-    int cursor_x, cursor_y;
-    bool cursor_on;
+    int cursor_x, cursor_y, cursor_on;
 } QemuGraphicConsole;
 
 typedef QemuConsoleClass QemuGraphicConsoleClass;
@@ -958,7 +957,7 @@ void dpy_text_resize(QemuConsole *con, int w, int h)
     }
 }
 
-void dpy_mouse_set(QemuConsole *c, int x, int y, bool on)
+void dpy_mouse_set(QemuConsole *c, int x, int y, int on)
 {
     QemuGraphicConsole *con = QEMU_GRAPHIC_CONSOLE(c);
     DisplayState *s = c->ds;
@@ -999,6 +998,19 @@ void dpy_cursor_define(QemuConsole *c, QEMUCursor *cursor)
             dcl->ops->dpy_cursor_define(dcl, cursor);
         }
     }
+}
+
+bool dpy_cursor_define_supported(QemuConsole *con)
+{
+    DisplayState *s = con->ds;
+    DisplayChangeListener *dcl;
+
+    QLIST_FOREACH(dcl, &s->listeners, next) {
+        if (dcl->ops->dpy_cursor_define) {
+            return true;
+        }
+    }
+    return false;
 }
 
 QEMUGLContext dpy_gl_ctx_create(QemuConsole *con,
@@ -1447,7 +1459,7 @@ int qemu_console_get_width(QemuConsole *con, int fallback)
     }
     switch (con->scanout.kind) {
     case SCANOUT_DMABUF:
-        return qemu_dmabuf_get_width(con->scanout.dmabuf);
+        return con->scanout.dmabuf->width;
     case SCANOUT_TEXTURE:
         return con->scanout.texture.width;
     case SCANOUT_SURFACE:
@@ -1464,7 +1476,7 @@ int qemu_console_get_height(QemuConsole *con, int fallback)
     }
     switch (con->scanout.kind) {
     case SCANOUT_DMABUF:
-        return qemu_dmabuf_get_height(con->scanout.dmabuf);
+        return con->scanout.dmabuf->height;
     case SCANOUT_TEXTURE:
         return con->scanout.texture.height;
     case SCANOUT_SURFACE:
@@ -1498,8 +1510,7 @@ void qemu_console_resize(QemuConsole *s, int width, int height)
     assert(QEMU_IS_GRAPHIC_CONSOLE(s));
 
     if ((s->scanout.kind != SCANOUT_SURFACE ||
-         (surface && surface_is_allocated(surface) &&
-                     !surface_is_placeholder(surface))) &&
+         (surface && !is_buffer_shared(surface) && !is_placeholder(surface))) &&
         qemu_console_get_width(s, -1) == width &&
         qemu_console_get_height(s, -1) == height) {
         return;
@@ -1632,9 +1643,4 @@ void qemu_display_help(void)
             printf("%s\n",  DisplayType_str(dpys[idx]->type));
         }
     }
-    printf("\n"
-           "Some display backends support suboptions, which can be set with\n"
-           "   -display backend,option=value,option=value...\n"
-           "For a short list of the suboptions for each display, see the "
-           "top-level -help output; more detail is in the documentation.\n");
 }

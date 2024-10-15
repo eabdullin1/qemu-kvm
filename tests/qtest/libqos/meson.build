@@ -61,7 +61,6 @@ libqos_srcs = files(
         'ppc64_pseries-machine.c',
         'x86_64_pc-machine.c',
         'riscv-virt-machine.c',
-        'loongarch-virt-machine.c',
 )
 
 if have_virtfs
@@ -69,6 +68,7 @@ if have_virtfs
 endif
 
 libqos = static_library('qos', libqos_srcs + genh,
+                        name_suffix: 'fa',
                         build_by_default: false)
 
-qos = declare_dependency(objects: libqos.extract_all_objects(recursive: false))
+qos = declare_dependency(link_whole: libqos)

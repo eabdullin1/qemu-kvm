@@ -9,5 +9,6 @@
 #CONFIG_WDT_DIAG288=n
 #CONFIG_PCIE_DEVICES=n
 
-# Boards are selected by default, uncomment to keep out of the build.
-# CONFIG_S390_CCW_VIRTIO=n
+# Boards:
+#
+CONFIG_S390_CCW_VIRTIO=y

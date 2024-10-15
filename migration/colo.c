@@ -18,6 +18,7 @@
 #include "qemu-file.h"
 #include "savevm.h"
 #include "migration/colo.h"
+#include "block.h"
 #include "io/channel-buffer.h"
 #include "trace.h"
 #include "qemu/error-report.h"
@@ -834,15 +835,6 @@ static void *colo_process_incoming_thread(void *opaque)
         return NULL;
     }
 
-    /* Make sure all file formats throw away their mutable metadata */
-    bql_lock();
-    bdrv_activate_all(&local_err);
-    bql_unlock();
-    if (local_err) {
-        error_report_err(local_err);
-        return NULL;
-    }
-
     failover_init_state();
 
     mis->to_src_file = qemu_file_get_return_path(mis->from_src_file);
@@ -927,15 +919,26 @@ out:
     return NULL;
 }
 
-void coroutine_fn colo_incoming_co(void)
+int coroutine_fn colo_incoming_co(void)
 {
     MigrationIncomingState *mis = migration_incoming_get_current();
+    Error *local_err = NULL;
     QemuThread th;
 
     assert(bql_locked());
-    assert(migration_incoming_colo_enabled());
 
-    qemu_thread_create(&th, "mig/dst/colo", colo_process_incoming_thread,
+    if (!migration_incoming_colo_enabled()) {
+        return 0;
+    }
+
+    /* Make sure all file formats throw away their mutable metadata */
+    bdrv_activate_all(&local_err);
+    if (local_err) {
+        error_report_err(local_err);
+        return -EINVAL;
+    }
+
+    qemu_thread_create(&th, "COLO incoming", colo_process_incoming_thread,
                        mis, QEMU_THREAD_JOINABLE);
 
     mis->colo_incoming_co = qemu_coroutine_self();
@@ -949,4 +952,6 @@ void coroutine_fn colo_incoming_co(void)
 
     /* We hold the global BQL, so it is safe here */
     colo_release_ram_cache();
+
+    return 0;
 }

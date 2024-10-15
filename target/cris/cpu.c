@@ -61,7 +61,7 @@ static int cris_cpu_mmu_index(CPUState *cs, bool ifetch)
     return !!(cpu_env(cs)->pregs[PR_CCS] & U_FLAG);
 }
 
-static void cris_cpu_reset_hold(Object *obj, ResetType type)
+static void cris_cpu_reset_hold(Object *obj)
 {
     CPUState *cs = CPU(obj);
     CRISCPUClass *ccc = CRIS_CPU_GET_CLASS(obj);
@@ -69,7 +69,7 @@ static void cris_cpu_reset_hold(Object *obj, ResetType type)
     uint32_t vr;
 
     if (ccc->parent_phases.hold) {
-        ccc->parent_phases.hold(obj, type);
+        ccc->parent_phases.hold(obj);
     }
 
     vr = env->pregs[PR_VR];
@@ -186,7 +186,6 @@ static const TCGCPUOps crisv10_tcg_ops = {
 #ifndef CONFIG_USER_ONLY
     .tlb_fill = cris_cpu_tlb_fill,
     .cpu_exec_interrupt = cris_cpu_exec_interrupt,
-    .cpu_exec_halt = cris_cpu_has_work,
     .do_interrupt = crisv10_cpu_do_interrupt,
 #endif /* !CONFIG_USER_ONLY */
 };
@@ -198,7 +197,6 @@ static const TCGCPUOps crisv32_tcg_ops = {
 #ifndef CONFIG_USER_ONLY
     .tlb_fill = cris_cpu_tlb_fill,
     .cpu_exec_interrupt = cris_cpu_exec_interrupt,
-    .cpu_exec_halt = cris_cpu_has_work,
     .do_interrupt = cris_cpu_do_interrupt,
 #endif /* !CONFIG_USER_ONLY */
 };

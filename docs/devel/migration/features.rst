@@ -12,5 +12,3 @@ Migration has plenty of features to support different use cases.
    virtio
    mapped-ram
    CPR
-   qpl-compression
-   uadk-compression

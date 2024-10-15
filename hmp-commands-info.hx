@@ -174,12 +174,25 @@ ERST
         .args_type  = "",
         .params     = "",
         .help       = "show PIC state",
-        .cmd_info_hrt = qmp_x_query_interrupt_controllers,
+        .cmd        = hmp_info_pic,
     },
 
 SRST
   ``info pic``
     Show PIC state.
+ERST
+
+    {
+        .name       = "rdma",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show RDMA state",
+        .cmd_info_hrt = qmp_x_query_rdma,
+    },
+
+SRST
+  ``info rdma``
+    Show RDMA state.
 ERST
 
     {
@@ -892,7 +905,7 @@ ERST
     },
 
 SRST
-  ``info stats``
+  ``stats``
     Show runtime-collected statistics
 ERST
 

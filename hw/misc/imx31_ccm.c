@@ -89,7 +89,7 @@ static const char *imx31_ccm_reg_name(uint32_t reg)
     case IMX31_CCM_PDR2_REG:
         return "PDR2";
     default:
-        snprintf(unknown, sizeof(unknown), "[%u ?]", reg);
+        sprintf(unknown, "[%u ?]", reg);
         return unknown;
     }
 }

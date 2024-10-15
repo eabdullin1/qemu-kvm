@@ -7,7 +7,6 @@
  */
 
 #include "qemu/osdep.h"
-#include "qapi/error.h"
 #include "hw/nubus/nubus-virtio-mmio.h"
 
 
@@ -24,7 +23,6 @@ static void nubus_virtio_mmio_set_input_irq(void *opaque, int n, int level)
 
 static void nubus_virtio_mmio_realize(DeviceState *dev, Error **errp)
 {
-    ERRP_GUARD();
     NubusVirtioMMIODeviceClass *nvmdc = NUBUS_VIRTIO_MMIO_GET_CLASS(dev);
     NubusVirtioMMIO *s = NUBUS_VIRTIO_MMIO(dev);
     NubusDevice *nd = NUBUS_DEVICE(dev);

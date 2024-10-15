@@ -19,8 +19,6 @@
 #include "hw/boards.h"
 #include "hw/hotplug.h"
 
-#define ACPI_CPU_HOTPLUG_REG_LEN 12
-
 typedef struct AcpiCpuStatus {
     CPUState *cpu;
     uint64_t arch_id;
@@ -63,10 +61,9 @@ typedef void (*build_madt_cpu_fn)(int uid, const CPUArchIdList *apic_ids,
                                   GArray *entry, bool force_enabled);
 
 void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
-                    build_madt_cpu_fn build_madt_cpu, hwaddr base_addr,
+                    build_madt_cpu_fn build_madt_cpu, hwaddr io_base,
                     const char *res_root,
-                    const char *event_handler_method,
-                    AmlRegionSpace rs);
+                    const char *event_handler_method);
 
 void acpi_cpu_ospm_status(CPUHotplugState *cpu_st, ACPIOSTInfoList ***list);
 

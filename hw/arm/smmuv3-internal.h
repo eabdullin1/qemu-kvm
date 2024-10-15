@@ -32,12 +32,6 @@ typedef enum SMMUTranslationStatus {
     SMMU_TRANS_SUCCESS,
 } SMMUTranslationStatus;
 
-typedef enum SMMUTranslationClass {
-    SMMU_CLASS_CD,
-    SMMU_CLASS_TT,
-    SMMU_CLASS_IN,
-} SMMUTranslationClass;
-
 /* MMIO Registers */
 
 REG32(IDR0,                0x0)
@@ -599,9 +593,21 @@ static inline int oas2bits(int oas_field)
     case 5:
         return 48;
     }
-
-    g_assert_not_reached();
+    return -1;
 }
+
+static inline int pa_range(STE *ste)
+{
+    int oas_field = MIN(STE_S2PS(ste), SMMU_IDR5_OAS);
+
+    if (!STE_S2AA64(ste)) {
+        return 40;
+    }
+
+    return oas2bits(oas_field);
+}
+
+#define MAX_PA(ste) ((1 << pa_range(ste)) - 1)
 
 /* CD fields */
 

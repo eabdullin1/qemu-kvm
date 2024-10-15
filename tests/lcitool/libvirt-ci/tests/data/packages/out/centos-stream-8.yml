@@ -71,7 +71,6 @@ native:
 - grep
 - gtk-doc
 - gtk-update-icon-cache
-- gtk-vnc2-devel
 - gtk3-devel
 - gzip
 - hostname
@@ -239,7 +238,6 @@ native:
 - ruby-devel
 - rubygem-rake
 - rust
-- rust-std-static
 - sanlock-devel
 - screen
 - scrub
@@ -280,5 +278,4 @@ native:
 - zlib-static
 - zstd
 pypi:
-- black
 - build

@@ -106,7 +106,6 @@ static void virtio_gpu_gl_reset(VirtIODevice *vdev)
 
 static void virtio_gpu_gl_device_realize(DeviceState *qdev, Error **errp)
 {
-    ERRP_GUARD();
     VirtIOGPU *g = VIRTIO_GPU(qdev);
 
 #if HOST_BIG_ENDIAN
@@ -120,12 +119,7 @@ static void virtio_gpu_gl_device_realize(DeviceState *qdev, Error **errp)
     }
 
     if (!display_opengl) {
-        error_setg(errp,
-                   "The display backend does not have OpenGL support enabled");
-        error_append_hint(errp,
-                          "It can be enabled with '-display BACKEND,gl=on' "
-                          "where BACKEND is the name of the display backend "
-                          "to use.\n");
+        error_setg(errp, "opengl is not available");
         return;
     }
 
@@ -176,4 +170,3 @@ static void virtio_register_types(void)
 type_init(virtio_register_types)
 
 module_dep("hw-display-virtio-gpu");
-module_dep("ui-opengl");

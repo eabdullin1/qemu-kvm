@@ -19,7 +19,6 @@
 #include "exec/ram_addr.h"
 #include "qapi/error.h"
 #include "qapi/qmp/qdict.h"
-#include "cpu.h"
 
 /* 512KiB cover 2GB of guest memory */
 #define CMMA_BLOCK_SIZE  (512 * KiB)
@@ -61,13 +60,11 @@ void hmp_migrationmode(Monitor *mon, const QDict *qdict)
     S390StAttribState *sas = s390_get_stattrib_device();
     S390StAttribClass *sac = S390_STATTRIB_GET_CLASS(sas);
     uint64_t what = qdict_get_int(qdict, "mode");
-    Error *local_err = NULL;
     int r;
 
-    r = sac->set_migrationmode(sas, what, &local_err);
+    r = sac->set_migrationmode(sas, what);
     if (r < 0) {
-        monitor_printf(mon, "Error: %s", error_get_pretty(local_err));
-        error_free(local_err);
+        monitor_printf(mon, "Error: %s", strerror(-r));
     }
 }
 
@@ -169,7 +166,7 @@ static int cmma_load(QEMUFile *f, void *opaque, int version_id)
     return ret;
 }
 
-static int cmma_save_setup(QEMUFile *f, void *opaque, Error **errp)
+static int cmma_save_setup(QEMUFile *f, void *opaque)
 {
     S390StAttribState *sas = S390_STATTRIB(opaque);
     S390StAttribClass *sac = S390_STATTRIB_GET_CLASS(sas);
@@ -178,7 +175,7 @@ static int cmma_save_setup(QEMUFile *f, void *opaque, Error **errp)
      * Signal that we want to start a migration, thus needing PGSTE dirty
      * tracking.
      */
-    res = sac->set_migrationmode(sas, true, errp);
+    res = sac->set_migrationmode(sas, 1);
     if (res) {
         return res;
     }
@@ -263,7 +260,7 @@ static void cmma_save_cleanup(void *opaque)
 {
     S390StAttribState *sas = S390_STATTRIB(opaque);
     S390StAttribClass *sac = S390_STATTRIB_GET_CLASS(sas);
-    sac->set_migrationmode(sas, false, NULL);
+    sac->set_migrationmode(sas, 0);
 }
 
 static bool cmma_active(void *opaque)
@@ -296,8 +293,7 @@ static long long qemu_s390_get_dirtycount_stub(S390StAttribState *sa)
 {
     return 0;
 }
-static int qemu_s390_set_migrationmode_stub(S390StAttribState *sa, bool value,
-                                            Error **errp)
+static int qemu_s390_set_migrationmode_stub(S390StAttribState *sa, bool value)
 {
     return 0;
 }

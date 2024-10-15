@@ -68,7 +68,6 @@ void gd_egl_draw(VirtualConsole *vc)
     GdkWindow *window;
 #ifdef CONFIG_GBM
     QemuDmaBuf *dmabuf = vc->gfx.guest_fb.dmabuf;
-    int fence_fd;
 #endif
     int ww, wh, ws;
 
@@ -84,10 +83,10 @@ void gd_egl_draw(VirtualConsole *vc)
     if (vc->gfx.scanout_mode) {
 #ifdef CONFIG_GBM
         if (dmabuf) {
-            if (!qemu_dmabuf_get_draw_submitted(dmabuf)) {
+            if (!dmabuf->draw_submitted) {
                 return;
             } else {
-                qemu_dmabuf_set_draw_submitted(dmabuf, false);
+                dmabuf->draw_submitted = false;
             }
         }
 #endif
@@ -100,9 +99,8 @@ void gd_egl_draw(VirtualConsole *vc)
 #ifdef CONFIG_GBM
         if (dmabuf) {
             egl_dmabuf_create_fence(dmabuf);
-            fence_fd = qemu_dmabuf_get_fence_fd(dmabuf);
-            if (fence_fd >= 0) {
-                qemu_set_fd_handler(fence_fd, gd_hw_gl_flushed, NULL, vc);
+            if (dmabuf->fence_fd > 0) {
+                qemu_set_fd_handler(dmabuf->fence_fd, gd_hw_gl_flushed, NULL, vc);
                 return;
             }
             graphic_hw_gl_block(vc->gfx.dcl.con, false);
@@ -151,9 +149,7 @@ void gd_egl_refresh(DisplayChangeListener *dcl)
     gd_update_monitor_refresh_rate(
             vc, vc->window ? vc->window : vc->gfx.drawing_area);
 
-    if (vc->gfx.guest_fb.dmabuf &&
-        qemu_dmabuf_get_draw_submitted(vc->gfx.guest_fb.dmabuf)) {
-        gd_egl_draw(vc);
+    if (vc->gfx.guest_fb.dmabuf && vc->gfx.guest_fb.dmabuf->draw_submitted) {
         return;
     }
 
@@ -268,30 +264,22 @@ void gd_egl_scanout_dmabuf(DisplayChangeListener *dcl,
 {
 #ifdef CONFIG_GBM
     VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
-    uint32_t x, y, width, height, backing_width, backing_height, texture;
-    bool y0_top;
 
     eglMakeCurrent(qemu_egl_display, vc->gfx.esurface,
                    vc->gfx.esurface, vc->gfx.ectx);
 
     egl_dmabuf_import_texture(dmabuf);
-    texture = qemu_dmabuf_get_texture(dmabuf);
-    if (!texture) {
+    if (!dmabuf->texture) {
         return;
     }
 
-    x = qemu_dmabuf_get_x(dmabuf);
-    y = qemu_dmabuf_get_y(dmabuf);
-    width = qemu_dmabuf_get_width(dmabuf);
-    height = qemu_dmabuf_get_height(dmabuf);
-    backing_width = qemu_dmabuf_get_backing_width(dmabuf);
-    backing_height = qemu_dmabuf_get_backing_height(dmabuf);
-    y0_top = qemu_dmabuf_get_y0_top(dmabuf);
+    gd_egl_scanout_texture(dcl, dmabuf->texture,
+                           dmabuf->y0_top,
+                           dmabuf->backing_width, dmabuf->backing_height,
+                           dmabuf->x, dmabuf->y, dmabuf->width,
+                           dmabuf->height, NULL);
 
-    gd_egl_scanout_texture(dcl, texture, y0_top, backing_width, backing_height,
-                           x, y, width, height, NULL);
-
-    if (qemu_dmabuf_get_allow_fences(dmabuf)) {
+    if (dmabuf->allow_fences) {
         vc->gfx.guest_fb.dmabuf = dmabuf;
     }
 #endif
@@ -303,19 +291,15 @@ void gd_egl_cursor_dmabuf(DisplayChangeListener *dcl,
 {
 #ifdef CONFIG_GBM
     VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
-    uint32_t backing_width, backing_height, texture;
 
     if (dmabuf) {
         egl_dmabuf_import_texture(dmabuf);
-        texture = qemu_dmabuf_get_texture(dmabuf);
-        if (!texture) {
+        if (!dmabuf->texture) {
             return;
         }
-
-        backing_width = qemu_dmabuf_get_backing_width(dmabuf);
-        backing_height = qemu_dmabuf_get_backing_height(dmabuf);
-        egl_fb_setup_for_tex(&vc->gfx.cursor_fb, backing_width, backing_height,
-                             texture, false);
+        egl_fb_setup_for_tex(&vc->gfx.cursor_fb,
+                             dmabuf->backing_width, dmabuf->backing_height,
+                             dmabuf->texture, false);
     } else {
         egl_fb_destroy(&vc->gfx.cursor_fb);
     }
@@ -379,10 +363,9 @@ void gd_egl_flush(DisplayChangeListener *dcl,
     VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
     GtkWidget *area = vc->gfx.drawing_area;
 
-    if (vc->gfx.guest_fb.dmabuf &&
-        !qemu_dmabuf_get_draw_submitted(vc->gfx.guest_fb.dmabuf)) {
+    if (vc->gfx.guest_fb.dmabuf && !vc->gfx.guest_fb.dmabuf->draw_submitted) {
         graphic_hw_gl_block(vc->gfx.dcl.con, true);
-        qemu_dmabuf_set_draw_submitted(vc->gfx.guest_fb.dmabuf, true);
+        vc->gfx.guest_fb.dmabuf->draw_submitted = true;
         gtk_egl_set_scanout_mode(vc, true);
         gtk_widget_queue_draw_area(area, x, y, w, h);
         return;

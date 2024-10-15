@@ -170,7 +170,7 @@ static inline bool allwinner_i2c_interrupt_is_enabled(AWI2CState *s)
     return s->cntr & TWI_CNTR_INT_EN;
 }
 
-static void allwinner_i2c_reset_hold(Object *obj, ResetType type)
+static void allwinner_i2c_reset_hold(Object *obj)
 {
     AWI2CState *s = AW_I2C(obj);
 
@@ -385,7 +385,8 @@ static void allwinner_i2c_write(void *opaque, hwaddr offset,
         break;
     case TWI_SRST_REG:
         if (((value & TWI_SRST_MASK) == 0) && (s->srst & TWI_SRST_MASK)) {
-            device_cold_reset(DEVICE(s));
+            /* Perform reset */
+            allwinner_i2c_reset_hold(OBJECT(s));
         }
         s->srst = value & TWI_SRST_MASK;
         break;

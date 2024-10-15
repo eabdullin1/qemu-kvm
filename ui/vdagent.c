@@ -185,7 +185,7 @@ static void vdagent_send_msg(VDAgentChardev *vd, VDAgentMessage *msg)
     vdagent_send_buf(vd);
 }
 
-static void vdagent_send_caps(VDAgentChardev *vd, bool request)
+static void vdagent_send_caps(VDAgentChardev *vd)
 {
     g_autofree VDAgentMessage *msg = g_malloc0(sizeof(VDAgentMessage) +
                                                sizeof(VDAgentAnnounceCapabilities) +
@@ -205,7 +205,6 @@ static void vdagent_send_caps(VDAgentChardev *vd, bool request)
 #endif
     }
 
-    caps->request = request;
     vdagent_send_msg(vd, msg);
 }
 
@@ -712,7 +711,7 @@ static void vdagent_chr_recv_caps(VDAgentChardev *vd, VDAgentMessage *msg)
 
     vd->caps = caps->caps[0];
     if (caps->request) {
-        vdagent_send_caps(vd, false);
+        vdagent_send_caps(vd);
     }
     if (have_mouse(vd) && vd->mouse_hs) {
         qemu_input_handler_activate(vd->mouse_hs);
@@ -721,8 +720,6 @@ static void vdagent_chr_recv_caps(VDAgentChardev *vd, VDAgentMessage *msg)
     memset(vd->last_serial, 0, sizeof(vd->last_serial));
 
     if (have_clipboard(vd) && vd->cbpeer.notifier.notify == NULL) {
-        qemu_clipboard_reset_serial();
-
         vd->cbpeer.name = "vdagent";
         vd->cbpeer.notifier.notify = vdagent_clipboard_notify;
         vd->cbpeer.request = vdagent_clipboard_request;
@@ -875,8 +872,6 @@ static void vdagent_chr_set_fe_open(struct Chardev *chr, int fe_open)
 {
     VDAgentChardev *vd = QEMU_VDAGENT_CHARDEV(chr);
 
-    trace_vdagent_fe_open(fe_open);
-
     if (!fe_open) {
         trace_vdagent_close();
         vdagent_disconnect(vd);
@@ -886,7 +881,7 @@ static void vdagent_chr_set_fe_open(struct Chardev *chr, int fe_open)
         return;
     }
 
-    vdagent_send_caps(vd, true);
+    trace_vdagent_open();
 }
 
 static void vdagent_chr_parse(QemuOpts *opts, ChardevBackend *backend,

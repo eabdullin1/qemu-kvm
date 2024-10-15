@@ -338,7 +338,8 @@ static void cxl_usp_realize(PCIDevice *d, Error **errp)
     cxl_cstate->cdat.build_cdat_table = build_cdat_table;
     cxl_cstate->cdat.free_cdat_table = free_default_cdat_table;
     cxl_cstate->cdat.private = d;
-    if (!cxl_doe_cdat_init(cxl_cstate, errp)) {
+    cxl_doe_cdat_init(cxl_cstate, errp);
+    if (*errp) {
         goto err_cap;
     }
 

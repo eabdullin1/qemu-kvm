@@ -278,33 +278,29 @@ static void dbus_scanout_dmabuf(DisplayChangeListener *dcl,
     DBusDisplayListener *ddl = container_of(dcl, DBusDisplayListener, dcl);
     g_autoptr(GError) err = NULL;
     g_autoptr(GUnixFDList) fd_list = NULL;
-    int fd;
-    uint32_t width, height, stride, fourcc;
-    uint64_t modifier;
-    bool y0_top;
 
-    fd = qemu_dmabuf_get_fd(dmabuf);
     fd_list = g_unix_fd_list_new();
-    if (g_unix_fd_list_append(fd_list, fd, &err) != 0) {
+    if (g_unix_fd_list_append(fd_list, dmabuf->fd, &err) != 0) {
         error_report("Failed to setup dmabuf fdlist: %s", err->message);
         return;
     }
 
     ddl_discard_pending_messages(ddl);
 
-    width = qemu_dmabuf_get_width(dmabuf);
-    height = qemu_dmabuf_get_height(dmabuf);
-    stride = qemu_dmabuf_get_stride(dmabuf);
-    fourcc = qemu_dmabuf_get_fourcc(dmabuf);
-    modifier = qemu_dmabuf_get_modifier(dmabuf);
-    y0_top = qemu_dmabuf_get_y0_top(dmabuf);
-
     /* FIXME: add missing x/y/w/h support */
     qemu_dbus_display1_listener_call_scanout_dmabuf(
-        ddl->proxy, g_variant_new_handle(0),
-        width, height, stride, fourcc, modifier,
-        y0_top, G_DBUS_CALL_FLAGS_NONE,
-        -1, fd_list, NULL, NULL, NULL);
+        ddl->proxy,
+        g_variant_new_handle(0),
+        dmabuf->width,
+        dmabuf->height,
+        dmabuf->stride,
+        dmabuf->fourcc,
+        dmabuf->modifier,
+        dmabuf->y0_top,
+        G_DBUS_CALL_FLAGS_NONE,
+        -1,
+        fd_list,
+        NULL, NULL, NULL);
 }
 #endif /* GBM */
 #endif /* OPENGL */
@@ -442,24 +438,28 @@ static void dbus_scanout_texture(DisplayChangeListener *dcl,
     trace_dbus_scanout_texture(tex_id, backing_y_0_top,
                                backing_width, backing_height, x, y, w, h);
 #ifdef CONFIG_GBM
-    g_autoptr(QemuDmaBuf) dmabuf = NULL;
-    int fd;
-    uint32_t stride, fourcc;
-    uint64_t modifier;
+    QemuDmaBuf dmabuf = {
+        .width = w,
+        .height = h,
+        .y0_top = backing_y_0_top,
+        .x = x,
+        .y = y,
+        .backing_width = backing_width,
+        .backing_height = backing_height,
+    };
 
     assert(tex_id);
-    fd = egl_get_fd_for_texture(tex_id, (EGLint *)&stride, (EGLint *)&fourcc,
-                                &modifier);
-    if (fd < 0) {
+    dmabuf.fd = egl_get_fd_for_texture(
+        tex_id, (EGLint *)&dmabuf.stride,
+        (EGLint *)&dmabuf.fourcc,
+        &dmabuf.modifier);
+    if (dmabuf.fd < 0) {
         error_report("%s: failed to get fd for texture", __func__);
         return;
     }
-    dmabuf = qemu_dmabuf_new(w, h, stride, x, y, backing_width,
-                             backing_height, fourcc, modifier, fd,
-                             false, backing_y_0_top);
 
-    dbus_scanout_dmabuf(dcl, dmabuf);
-    qemu_dmabuf_close(dmabuf);
+    dbus_scanout_dmabuf(dcl, &dmabuf);
+    close(dmabuf.fd);
 #endif
 
 #ifdef WIN32
@@ -488,7 +488,6 @@ static void dbus_cursor_dmabuf(DisplayChangeListener *dcl,
     DisplaySurface *ds;
     GVariant *v_data = NULL;
     egl_fb cursor_fb = EGL_FB_INIT;
-    uint32_t width, height, texture;
 
     if (!dmabuf) {
         qemu_dbus_display1_listener_call_mouse_set(
@@ -498,16 +497,12 @@ static void dbus_cursor_dmabuf(DisplayChangeListener *dcl,
     }
 
     egl_dmabuf_import_texture(dmabuf);
-    texture = qemu_dmabuf_get_texture(dmabuf);
-    if (!texture) {
+    if (!dmabuf->texture) {
         return;
     }
-
-    width = qemu_dmabuf_get_width(dmabuf);
-    height = qemu_dmabuf_get_height(dmabuf);
-
-    egl_fb_setup_for_tex(&cursor_fb, width, height, texture, false);
-    ds = qemu_create_displaysurface(width, height);
+    egl_fb_setup_for_tex(&cursor_fb, dmabuf->width, dmabuf->height,
+                         dmabuf->texture, false);
+    ds = qemu_create_displaysurface(dmabuf->width, dmabuf->height);
     egl_fb_read(ds, &cursor_fb);
 
     v_data = g_variant_new_from_data(
@@ -726,7 +721,7 @@ static void dbus_gfx_switch(DisplayChangeListener *dcl,
 }
 
 static void dbus_mouse_set(DisplayChangeListener *dcl,
-                           int x, int y, bool on)
+                           int x, int y, int on)
 {
     DBusDisplayListener *ddl = container_of(dcl, DBusDisplayListener, dcl);
 

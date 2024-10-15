@@ -1312,10 +1312,7 @@ static gint g_cmp_ids(gconstpointer data1, gconstpointer data2)
     tx_ready_reg_info *tx_reg_1 = (tx_ready_reg_info *) data1;
     tx_ready_reg_info *tx_reg_2 = (tx_ready_reg_info *) data2;
 
-    if (tx_reg_1->can_id == tx_reg_2->can_id) {
-        return (tx_reg_1->reg_num < tx_reg_2->reg_num) ? -1 : 1;
-    }
-    return (tx_reg_1->can_id < tx_reg_2->can_id) ? -1 : 1;
+    return tx_reg_1->can_id - tx_reg_2->can_id;
 }
 
 static void free_list(GSList *list)

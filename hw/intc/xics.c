@@ -35,13 +35,14 @@
 #include "qemu/module.h"
 #include "qapi/visitor.h"
 #include "migration/vmstate.h"
+#include "monitor/monitor.h"
 #include "hw/intc/intc.h"
 #include "hw/irq.h"
 #include "sysemu/kvm.h"
 #include "sysemu/reset.h"
 #include "target/ppc/cpu.h"
 
-void icp_pic_print_info(ICPState *icp, GString *buf)
+void icp_pic_print_info(ICPState *icp, Monitor *mon)
 {
     int cpu_index;
 
@@ -62,17 +63,17 @@ void icp_pic_print_info(ICPState *icp, GString *buf)
         icp_synchronize_state(icp);
     }
 
-    g_string_append_printf(buf, "CPU %d XIRR=%08x (%p) PP=%02x MFRR=%02x\n",
-                           cpu_index, icp->xirr, icp->xirr_owner,
-                           icp->pending_priority, icp->mfrr);
+    monitor_printf(mon, "CPU %d XIRR=%08x (%p) PP=%02x MFRR=%02x\n",
+                   cpu_index, icp->xirr, icp->xirr_owner,
+                   icp->pending_priority, icp->mfrr);
 }
 
-void ics_pic_print_info(ICSState *ics, GString *buf)
+void ics_pic_print_info(ICSState *ics, Monitor *mon)
 {
     uint32_t i;
 
-    g_string_append_printf(buf, "ICS %4x..%4x %p\n",
-                           ics->offset, ics->offset + ics->nr_irqs - 1, ics);
+    monitor_printf(mon, "ICS %4x..%4x %p\n",
+                   ics->offset, ics->offset + ics->nr_irqs - 1, ics);
 
     if (!ics->irqs) {
         return;
@@ -88,11 +89,11 @@ void ics_pic_print_info(ICSState *ics, GString *buf)
         if (!(irq->flags & XICS_FLAGS_IRQ_MASK)) {
             continue;
         }
-        g_string_append_printf(buf, "  %4x %s %02x %02x\n",
-                               ics->offset + i,
-                               (irq->flags & XICS_FLAGS_IRQ_LSI) ?
-                               "LSI" : "MSI",
-                               irq->priority, irq->status);
+        monitor_printf(mon, "  %4x %s %02x %02x\n",
+                       ics->offset + i,
+                       (irq->flags & XICS_FLAGS_IRQ_LSI) ?
+                       "LSI" : "MSI",
+                       irq->priority, irq->status);
     }
 }
 
@@ -578,7 +579,7 @@ static void ics_reset_irq(ICSIRQState *irq)
     irq->saved_priority = 0xff;
 }
 
-static void ics_reset_hold(Object *obj, ResetType type)
+static void ics_reset_hold(Object *obj)
 {
     ICSState *ics = ICS(obj);
     g_autofree uint8_t *flags = g_malloc(ics->nr_irqs);

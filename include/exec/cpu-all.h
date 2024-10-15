@@ -19,11 +19,12 @@
 #ifndef CPU_ALL_H
 #define CPU_ALL_H
 
-#include "exec/page-protection.h"
 #include "exec/cpu-common.h"
 #include "exec/memory.h"
 #include "exec/tswap.h"
+#include "qemu/thread.h"
 #include "hw/core/cpu.h"
+#include "qemu/rcu.h"
 
 /* some important defines:
  *
@@ -35,6 +36,16 @@
 
 #if HOST_BIG_ENDIAN != TARGET_BIG_ENDIAN
 #define BSWAP_NEEDED
+#endif
+
+#if TARGET_LONG_SIZE == 4
+#define tswapl(s) tswap32(s)
+#define tswapls(s) tswap32s((uint32_t *)(s))
+#define bswaptls(s) bswap32s(s)
+#else
+#define tswapl(s) tswap64(s)
+#define tswapls(s) tswap64s((uint64_t *)(s))
+#define bswaptls(s) bswap64s(s)
 #endif
 
 /* Target-endianness CPU memory access functions. These fit into the
@@ -65,7 +76,10 @@
 /* MMU memory access macros */
 
 #if defined(CONFIG_USER_ONLY)
-#include "user/abitypes.h"
+#include "exec/user/abitypes.h"
+#include "exec/user/guest-base.h"
+
+extern bool have_guest_base;
 
 /*
  * If non-zero, the guest virtual address space is a contiguous subset
@@ -140,23 +154,32 @@ static inline void stl_phys_notdirty(AddressSpace *as, hwaddr addr, uint32_t val
 #ifdef TARGET_PAGE_BITS_VARY
 # include "exec/page-vary.h"
 extern const TargetPageBits target_page;
-# ifdef CONFIG_DEBUG_TCG
-#  define TARGET_PAGE_BITS   ({ assert(target_page.decided); \
-                                target_page.bits; })
-#  define TARGET_PAGE_MASK   ({ assert(target_page.decided); \
-                                (target_long)target_page.mask; })
-# else
-#  define TARGET_PAGE_BITS   target_page.bits
-#  define TARGET_PAGE_MASK   ((target_long)target_page.mask)
-# endif
-# define TARGET_PAGE_SIZE    (-(int)TARGET_PAGE_MASK)
+#ifdef CONFIG_DEBUG_TCG
+#define TARGET_PAGE_BITS   ({ assert(target_page.decided); target_page.bits; })
+#define TARGET_PAGE_MASK   ({ assert(target_page.decided); \
+                              (target_long)target_page.mask; })
 #else
-# define TARGET_PAGE_BITS_MIN TARGET_PAGE_BITS
-# define TARGET_PAGE_SIZE    (1 << TARGET_PAGE_BITS)
-# define TARGET_PAGE_MASK    ((target_long)-1 << TARGET_PAGE_BITS)
+#define TARGET_PAGE_BITS   target_page.bits
+#define TARGET_PAGE_MASK   ((target_long)target_page.mask)
+#endif
+#define TARGET_PAGE_SIZE   (-(int)TARGET_PAGE_MASK)
+#else
+#define TARGET_PAGE_BITS_MIN TARGET_PAGE_BITS
+#define TARGET_PAGE_SIZE   (1 << TARGET_PAGE_BITS)
+#define TARGET_PAGE_MASK   ((target_long)-1 << TARGET_PAGE_BITS)
 #endif
 
 #define TARGET_PAGE_ALIGN(addr) ROUND_UP((addr), TARGET_PAGE_SIZE)
+
+#if defined(CONFIG_BSD) && defined(CONFIG_USER_ONLY)
+/* FIXME: Code that sets/uses this is broken and needs to go away.  */
+#define PAGE_RESERVED  0x0100
+#endif
+/*
+ * For linux-user, indicates that the page is mapped with the same semantics
+ * in both guest and host.
+ */
+#define PAGE_PASSTHROUGH 0x0800
 
 #if defined(CONFIG_USER_ONLY)
 void page_dump(FILE *f);
@@ -368,7 +391,6 @@ static inline bool tlb_hit(uint64_t tlb_addr, vaddr addr)
 #endif /* !CONFIG_USER_ONLY */
 
 /* Validate correct placement of CPUArchState. */
-#include "cpu.h"
 QEMU_BUILD_BUG_ON(offsetof(ArchCPU, parent_obj) != 0);
 QEMU_BUILD_BUG_ON(offsetof(ArchCPU, env) != sizeof(CPUState));
 

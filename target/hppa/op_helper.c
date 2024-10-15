@@ -42,6 +42,20 @@ G_NORETURN void hppa_dynamic_excp(CPUHPPAState *env, int excp, uintptr_t ra)
     cpu_loop_exit_restore(cs, ra);
 }
 
+void HELPER(tsv)(CPUHPPAState *env, target_ulong cond)
+{
+    if (unlikely((target_long)cond < 0)) {
+        hppa_dynamic_excp(env, EXCP_OVERFLOW, GETPC());
+    }
+}
+
+void HELPER(tcond)(CPUHPPAState *env, target_ulong cond)
+{
+    if (unlikely(cond)) {
+        hppa_dynamic_excp(env, EXCP_COND, GETPC());
+    }
+}
+
 static void atomic_store_mask32(CPUHPPAState *env, target_ulong addr,
                                 uint32_t val, uint32_t mask, uintptr_t ra)
 {
@@ -334,7 +348,8 @@ target_ulong HELPER(probe)(CPUHPPAState *env, target_ulong addr,
     }
 
     mmu_idx = PRIV_P_TO_MMU_IDX(level, env->psw & PSW_P);
-    excp = hppa_get_physical_address(env, addr, mmu_idx, 0, &phys, &prot);
+    excp = hppa_get_physical_address(env, addr, mmu_idx, 0, &phys,
+                                     &prot, NULL);
     if (excp >= 0) {
         cpu_restore_state(env_cpu(env), GETPC());
         hppa_set_ior_and_isr(env, addr, MMU_IDX_MMU_DISABLED(mmu_idx));

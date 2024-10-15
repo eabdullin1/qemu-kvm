@@ -12,6 +12,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/error-report.h"
+#include <zlib.h>
 #include "hw/core/cpu.h"
 #include "qapi/error.h"
 #include "exec/ramblock.h"
@@ -89,15 +90,9 @@ static int64_t do_calculate_dirtyrate(DirtyPageRecord dirty_pages,
 
 void global_dirty_log_change(unsigned int flag, bool start)
 {
-    Error *local_err = NULL;
-    bool ret;
-
     bql_lock();
     if (start) {
-        ret = memory_global_dirty_log_start(flag, &local_err);
-        if (!ret) {
-            error_report_err(local_err);
-        }
+        memory_global_dirty_log_start(flag);
     } else {
         memory_global_dirty_log_stop(flag);
     }
@@ -613,12 +608,9 @@ static void calculate_dirtyrate_dirty_bitmap(struct DirtyRateConfig config)
 {
     int64_t start_time;
     DirtyPageRecord dirty_pages;
-    Error *local_err = NULL;
 
     bql_lock();
-    if (!memory_global_dirty_log_start(GLOBAL_DIRTY_DIRTY_RATE, &local_err)) {
-        error_report_err(local_err);
-    }
+    memory_global_dirty_log_start(GLOBAL_DIRTY_DIRTY_RATE);
 
     /*
      * 1'round of log sync may return all 1 bits with

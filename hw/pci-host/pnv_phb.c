@@ -208,7 +208,7 @@ static void pnv_phb_class_init(ObjectClass *klass, void *data)
     dc->user_creatable = true;
 }
 
-static void pnv_phb_root_port_reset_hold(Object *obj, ResetType type)
+static void pnv_phb_root_port_reset_hold(Object *obj)
 {
     PCIERootPortClass *rpc = PCIE_ROOT_PORT_GET_CLASS(obj);
     PnvPHBRootPort *phb_rp = PNV_PHB_ROOT_PORT(obj);
@@ -216,7 +216,7 @@ static void pnv_phb_root_port_reset_hold(Object *obj, ResetType type)
     uint8_t *conf = d->config;
 
     if (rpc->parent_phases.hold) {
-        rpc->parent_phases.hold(obj, type);
+        rpc->parent_phases.hold(obj);
     }
 
     if (phb_rp->version == 3) {

@@ -16,7 +16,7 @@
 #include <glib/gstdio.h>
 #include "libqtest.h"
 #include "boot-sector.h"
-#include "ppc-util.h"
+#include "libqos/libqos-spapr.h"
 
 #define NETNAME "net0"
 

@@ -14,10 +14,7 @@
 #error Cannot include semihosting/uaccess.h from user emulation
 #endif
 
-#include "exec/cpu-common.h"
-#include "exec/cpu-defs.h"
-#include "exec/tswap.h"
-#include "exec/page-protection.h"
+#include "cpu.h"
 
 #define get_user_u64(val, addr)                                         \
     ({ uint64_t val_ = 0;                                               \

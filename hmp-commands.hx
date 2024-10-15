@@ -909,23 +909,26 @@ ERST
 
     {
         .name       = "migrate",
-        .args_type  = "detach:-d,resume:-r,uri:s",
-        .params     = "[-d] [-r] uri",
+        .args_type  = "detach:-d,blk:-b,inc:-i,resume:-r,uri:s",
+        .params     = "[-d] [-b] [-i] [-r] uri",
         .help       = "migrate to URI (using -d to not wait for completion)"
-		      "\n\t\t\t -r to resume a paused postcopy migration",
+		      "\n\t\t\t -b for migration without shared storage with"
+		      " full copy of disk\n\t\t\t -i for migration without "
+		      "shared storage with incremental copy of disk "
+		      "(base image shared between src and destination)"
+                      "\n\t\t\t -r to resume a paused migration",
         .cmd        = hmp_migrate,
     },
 
 
 SRST
-``migrate [-d] [-r]`` *uri*
-  Migrate the VM to *uri*.
+``migrate [-d] [-b] [-i]`` *uri*
+  Migrate to *uri* (using -d to not wait for completion).
 
-  ``-d``
-    Start the migration process, but do not wait for its completion.  To
-    query an ongoing migration process, use "info migrate".
-  ``-r``
-    Resume a paused postcopy migration.
+  ``-b``
+    for migration with full copy of disk
+  ``-i``
+    for migration with incremental copy of disk (base image is shared)
 ERST
 
     {

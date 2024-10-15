@@ -291,8 +291,7 @@ int is_pmp_entry_mapped(unsigned long entry)
 	unsigned long addr;
 	unsigned long log2len;
 
-	if (pmp_get(entry, &prot, &addr, &log2len) != 0)
-		return false;
+	pmp_get(entry, &prot, &addr, &log2len);
 
 	/* If address matching bits are non-zero, the entry is enable */
 	if (prot & PMP_A)

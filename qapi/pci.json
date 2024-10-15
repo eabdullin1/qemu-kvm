@@ -93,8 +93,7 @@
 #
 # Information about the Class of a PCI device
 #
-# @desc: a string description of the device's class (not stable, and
-#     should only be treated as informational)
+# @desc: a string description of the device's class
 #
 # @class: the class code of the device
 #
@@ -147,6 +146,9 @@
 #
 # @regions: a list of the PCI I/O regions associated with the device
 #
+# Notes: the contents of @class_info.desc are not stable and should
+#     only be treated as informational.
+#
 # Since: 0.14
 ##
 { 'struct': 'PciDeviceInfo',
@@ -180,7 +182,7 @@
 #
 # Since: 0.14
 #
-# .. qmp-example::
+# Example:
 #
 #     -> { "execute": "query-pci" }
 #     <- { "return": [
@@ -309,6 +311,7 @@
 #           ]
 #        }
 #
-# This example has been shortened as the real response is too long.
+# Note: This example has been shortened as the real response is too
+#     long.
 ##
 { 'command': 'query-pci', 'returns': ['PciInfo'] }

@@ -55,8 +55,6 @@
 # - {braces}
 ##
 
-# Not a doc comment
-
 ##
 # @Enum:
 #
@@ -157,7 +155,7 @@
 # @cmd-feat1: a feature
 # @cmd-feat2: another feature
 #
-# .. note:: @arg3 is undocumented
+# Note: @arg3 is undocumented
 #
 # Returns: @Object
 #
@@ -165,29 +163,21 @@
 #
 # TODO: frobnicate
 #
-# .. admonition:: Notes
+# Notes:
 #
 #  - Lorem ipsum dolor sit amet
 #  - Ut enim ad minim veniam
 #
 #  Duis aute irure dolor
 #
-# .. qmp-example::
-#    :title: Ideal fast-food burger situation
+# Example:
 #
-#    -> "in"
-#    <- "out"
+#  -> in
+#  <- out
 #
-# Examples::
-#
-#  - Not a QMP code block
-#  - Merely a preformatted code block literal
-#  It isn't even an rST list.
+# Examples:
 #  - *verbatim*
 #  - {braces}
-#
-# Note::
-#     Ceci n'est pas une note
 #
 # Since: 2.10
 ##
@@ -204,11 +194,11 @@
 # @cmd-feat1: a feature
 # @cmd-feat2: another feature
 #
-# .. qmp-example::
+# Example:
 #
-#    -> "this example"
+#  -> in
 #
-#    <- "has no title"
+#  <- out
 ##
 { 'command': 'cmd-boxed', 'boxed': true,
   'data': 'Object',

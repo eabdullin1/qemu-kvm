@@ -61,12 +61,6 @@ struct vtd_as_key {
     uint32_t pasid;
 };
 
-/* bus/devfn is PCI device's real BDF not the aliased one */
-struct vtd_hiod_key {
-    PCIBus *bus;
-    uint8_t devfn;
-};
-
 struct vtd_iotlb_key {
     uint64_t gfn;
     uint32_t pasid;
@@ -256,25 +250,6 @@ static guint vtd_as_hash(gconstpointer v)
     return (guint)(value << 8 | key->devfn);
 }
 
-/* Same implementation as vtd_as_hash() */
-static guint vtd_hiod_hash(gconstpointer v)
-{
-    return vtd_as_hash(v);
-}
-
-static gboolean vtd_hiod_equal(gconstpointer v1, gconstpointer v2)
-{
-    const struct vtd_hiod_key *key1 = v1;
-    const struct vtd_hiod_key *key2 = v2;
-
-    return (key1->bus == key2->bus) && (key1->devfn == key2->devfn);
-}
-
-static void vtd_hiod_destroy(gpointer v)
-{
-    object_unref(v);
-}
-
 static gboolean vtd_hash_remove_by_domain(gpointer key, gpointer value,
                                           gpointer user_data)
 {
@@ -358,7 +333,7 @@ static VTDIOTLBEntry *vtd_lookup_iotlb(IntelIOMMUState *s, uint16_t source_id,
 {
     struct vtd_iotlb_key key;
     VTDIOTLBEntry *entry;
-    unsigned level;
+    int level;
 
     for (level = VTD_SL_PT_LEVEL; level < VTD_SL_PML4_LEVEL; level++) {
         key.gfn = vtd_get_iotlb_gfn(addr, level);
@@ -1195,7 +1170,7 @@ static int vtd_iova_to_slpte(IntelIOMMUState *s, VTDContextEntry *ce,
     }
 }
 
-typedef int (*vtd_page_walk_hook)(const IOMMUTLBEvent *event, void *private);
+typedef int (*vtd_page_walk_hook)(IOMMUTLBEvent *event, void *private);
 
 /**
  * Constant information used during page walking
@@ -1558,7 +1533,7 @@ static int vtd_dev_to_context_entry(IntelIOMMUState *s, uint8_t bus_num,
     return 0;
 }
 
-static int vtd_sync_shadow_page_hook(const IOMMUTLBEvent *event,
+static int vtd_sync_shadow_page_hook(IOMMUTLBEvent *event,
                                      void *private)
 {
     memory_region_notify_iommu(private, 0, *event);
@@ -2244,7 +2219,7 @@ static void vtd_iotlb_page_invalidate_notify(IntelIOMMUState *s,
                  * page tables.  We just deliver the PSI down to
                  * invalidate caches.
                  */
-                const IOMMUTLBEvent event = {
+                IOMMUTLBEvent event = {
                     .type = IOMMU_NOTIFIER_UNMAP,
                     .entry = {
                         .target_as = &address_space_memory,
@@ -2666,43 +2641,13 @@ static bool vtd_process_inv_iec_desc(IntelIOMMUState *s,
     return true;
 }
 
-static void do_invalidate_device_tlb(VTDAddressSpace *vtd_dev_as,
-                                     bool size, hwaddr addr)
-{
-    /*
-     * According to ATS spec table 2.4:
-     * S = 0, bits 15:12 = xxxx     range size: 4K
-     * S = 1, bits 15:12 = xxx0     range size: 8K
-     * S = 1, bits 15:12 = xx01     range size: 16K
-     * S = 1, bits 15:12 = x011     range size: 32K
-     * S = 1, bits 15:12 = 0111     range size: 64K
-     * ...
-     */
-
-    IOMMUTLBEvent event;
-    uint64_t sz;
-
-    if (size) {
-        sz = (VTD_PAGE_SIZE * 2) << cto64(addr >> VTD_PAGE_SHIFT);
-        addr &= ~(sz - 1);
-    } else {
-        sz = VTD_PAGE_SIZE;
-    }
-
-    event.type = IOMMU_NOTIFIER_DEVIOTLB_UNMAP;
-    event.entry.target_as = &vtd_dev_as->as;
-    event.entry.addr_mask = sz - 1;
-    event.entry.iova = addr;
-    event.entry.perm = IOMMU_NONE;
-    event.entry.translated_addr = 0;
-    memory_region_notify_iommu(&vtd_dev_as->iommu, 0, event);
-}
-
 static bool vtd_process_device_iotlb_desc(IntelIOMMUState *s,
                                           VTDInvDesc *inv_desc)
 {
     VTDAddressSpace *vtd_dev_as;
+    IOMMUTLBEvent event;
     hwaddr addr;
+    uint64_t sz;
     uint16_t sid;
     bool size;
 
@@ -2727,7 +2672,28 @@ static bool vtd_process_device_iotlb_desc(IntelIOMMUState *s,
         goto done;
     }
 
-    do_invalidate_device_tlb(vtd_dev_as, size, addr);
+    /* According to ATS spec table 2.4:
+     * S = 0, bits 15:12 = xxxx     range size: 4K
+     * S = 1, bits 15:12 = xxx0     range size: 8K
+     * S = 1, bits 15:12 = xx01     range size: 16K
+     * S = 1, bits 15:12 = x011     range size: 32K
+     * S = 1, bits 15:12 = 0111     range size: 64K
+     * ...
+     */
+    if (size) {
+        sz = (VTD_PAGE_SIZE * 2) << cto64(addr >> VTD_PAGE_SHIFT);
+        addr &= ~(sz - 1);
+    } else {
+        sz = VTD_PAGE_SIZE;
+    }
+
+    event.type = IOMMU_NOTIFIER_DEVIOTLB_UNMAP;
+    event.entry.target_as = &vtd_dev_as->as;
+    event.entry.addr_mask = sz - 1;
+    event.entry.iova = addr;
+    event.entry.perm = IOMMU_NONE;
+    event.entry.translated_addr = 0;
+    memory_region_notify_iommu(&vtd_dev_as->iommu, 0, event);
 
 done:
     return true;
@@ -2947,9 +2913,7 @@ static uint64_t vtd_mem_read(void *opaque, hwaddr addr, unsigned size)
 
     /* Invalidation Queue Address Register, 64-bit */
     case DMAR_IQA_REG:
-        val = s->iq |
-              (vtd_get_quad(s, DMAR_IQA_REG) &
-              (VTD_IQA_QS | VTD_IQA_DW_MASK));
+        val = s->iq | (vtd_get_quad(s, DMAR_IQA_REG) & VTD_IQA_QS);
         if (size == 4) {
             val = val & ((1ULL << 32) - 1);
         }
@@ -3848,87 +3812,6 @@ VTDAddressSpace *vtd_find_add_as(IntelIOMMUState *s, PCIBus *bus,
     return vtd_dev_as;
 }
 
-static bool vtd_check_hiod(IntelIOMMUState *s, HostIOMMUDevice *hiod,
-                           Error **errp)
-{
-    HostIOMMUDeviceClass *hiodc = HOST_IOMMU_DEVICE_GET_CLASS(hiod);
-    int ret;
-
-    if (!hiodc->get_cap) {
-        error_setg(errp, ".get_cap() not implemented");
-        return false;
-    }
-
-    /* Common checks */
-    ret = hiodc->get_cap(hiod, HOST_IOMMU_DEVICE_CAP_AW_BITS, errp);
-    if (ret < 0) {
-        return false;
-    }
-    if (s->aw_bits > ret) {
-        error_setg(errp, "aw-bits %d > host aw-bits %d", s->aw_bits, ret);
-        return false;
-    }
-
-    return true;
-}
-
-static bool vtd_dev_set_iommu_device(PCIBus *bus, void *opaque, int devfn,
-                                     HostIOMMUDevice *hiod, Error **errp)
-{
-    IntelIOMMUState *s = opaque;
-    struct vtd_as_key key = {
-        .bus = bus,
-        .devfn = devfn,
-    };
-    struct vtd_as_key *new_key;
-
-    assert(hiod);
-
-    vtd_iommu_lock(s);
-
-    if (g_hash_table_lookup(s->vtd_host_iommu_dev, &key)) {
-        error_setg(errp, "Host IOMMU device already exist");
-        vtd_iommu_unlock(s);
-        return false;
-    }
-
-    if (!vtd_check_hiod(s, hiod, errp)) {
-        vtd_iommu_unlock(s);
-        return false;
-    }
-
-    new_key = g_malloc(sizeof(*new_key));
-    new_key->bus = bus;
-    new_key->devfn = devfn;
-
-    object_ref(hiod);
-    g_hash_table_insert(s->vtd_host_iommu_dev, new_key, hiod);
-
-    vtd_iommu_unlock(s);
-
-    return true;
-}
-
-static void vtd_dev_unset_iommu_device(PCIBus *bus, void *opaque, int devfn)
-{
-    IntelIOMMUState *s = opaque;
-    struct vtd_as_key key = {
-        .bus = bus,
-        .devfn = devfn,
-    };
-
-    vtd_iommu_lock(s);
-
-    if (!g_hash_table_lookup(s->vtd_host_iommu_dev, &key)) {
-        vtd_iommu_unlock(s);
-        return;
-    }
-
-    g_hash_table_remove(s->vtd_host_iommu_dev, &key);
-
-    vtd_iommu_unlock(s);
-}
-
 /* Unmap the whole range in the notifier's scope. */
 static void vtd_address_space_unmap(VTDAddressSpace *as, IOMMUNotifier *n)
 {
@@ -4006,7 +3889,7 @@ static void vtd_address_space_refresh_all(IntelIOMMUState *s)
     vtd_switch_address_space_all(s);
 }
 
-static int vtd_replay_hook(const IOMMUTLBEvent *event, void *private)
+static int vtd_replay_hook(IOMMUTLBEvent *event, void *private)
 {
     memory_region_notify_iommu_one(private, event);
     return 0;
@@ -4051,10 +3934,30 @@ static void vtd_iommu_replay(IOMMUMemoryRegion *iommu_mr, IOMMUNotifier *n)
     return;
 }
 
-static void vtd_cap_init(IntelIOMMUState *s)
+/* Do the initialization. It will also be called when reset, so pay
+ * attention when adding new initialization stuff.
+ */
+static void vtd_init(IntelIOMMUState *s)
 {
     X86IOMMUState *x86_iommu = X86_IOMMU_DEVICE(s);
 
+    memset(s->csr, 0, DMAR_REG_SIZE);
+    memset(s->wmask, 0, DMAR_REG_SIZE);
+    memset(s->w1cmask, 0, DMAR_REG_SIZE);
+    memset(s->womask, 0, DMAR_REG_SIZE);
+
+    s->root = 0;
+    s->root_scalable = false;
+    s->dmar_enabled = false;
+    s->intr_enabled = false;
+    s->iq_head = 0;
+    s->iq_tail = 0;
+    s->iq = 0;
+    s->iq_size = 0;
+    s->qi_enabled = false;
+    s->iq_last_desc_type = VTD_INV_DESC_NONE;
+    s->iq_dw = false;
+    s->next_frcd_reg = 0;
     s->cap = VTD_CAP_FRO | VTD_CAP_NFR | VTD_CAP_ND |
              VTD_CAP_MAMV | VTD_CAP_PSI | VTD_CAP_SLLPS |
              VTD_CAP_MGAW(s->aw_bits);
@@ -4070,6 +3973,27 @@ static void vtd_cap_init(IntelIOMMUState *s)
             }
     }
     s->ecap = VTD_ECAP_QI | VTD_ECAP_IRO;
+
+    /*
+     * Rsvd field masks for spte
+     */
+    vtd_spte_rsvd[0] = ~0ULL;
+    vtd_spte_rsvd[1] = VTD_SPTE_PAGE_L1_RSVD_MASK(s->aw_bits,
+                                                  x86_iommu->dt_supported);
+    vtd_spte_rsvd[2] = VTD_SPTE_PAGE_L2_RSVD_MASK(s->aw_bits);
+    vtd_spte_rsvd[3] = VTD_SPTE_PAGE_L3_RSVD_MASK(s->aw_bits);
+    vtd_spte_rsvd[4] = VTD_SPTE_PAGE_L4_RSVD_MASK(s->aw_bits);
+
+    vtd_spte_rsvd_large[2] = VTD_SPTE_LPAGE_L2_RSVD_MASK(s->aw_bits,
+                                                         x86_iommu->dt_supported);
+    vtd_spte_rsvd_large[3] = VTD_SPTE_LPAGE_L3_RSVD_MASK(s->aw_bits,
+                                                         x86_iommu->dt_supported);
+
+    if (s->scalable_mode || s->snoop_control) {
+        vtd_spte_rsvd[1] &= ~VTD_SPTE_SNP;
+        vtd_spte_rsvd_large[2] &= ~VTD_SPTE_SNP;
+        vtd_spte_rsvd_large[3] &= ~VTD_SPTE_SNP;
+    }
 
     if (x86_iommu_ir_supported(x86_iommu)) {
         s->ecap |= VTD_ECAP_IR | VTD_ECAP_MHMV;
@@ -4102,56 +4026,6 @@ static void vtd_cap_init(IntelIOMMUState *s)
 
     if (s->pasid) {
         s->ecap |= VTD_ECAP_PASID;
-    }
-}
-
-/*
- * Do the initialization. It will also be called when reset, so pay
- * attention when adding new initialization stuff.
- */
-static void vtd_init(IntelIOMMUState *s)
-{
-    X86IOMMUState *x86_iommu = X86_IOMMU_DEVICE(s);
-
-    memset(s->csr, 0, DMAR_REG_SIZE);
-    memset(s->wmask, 0, DMAR_REG_SIZE);
-    memset(s->w1cmask, 0, DMAR_REG_SIZE);
-    memset(s->womask, 0, DMAR_REG_SIZE);
-
-    s->root = 0;
-    s->root_scalable = false;
-    s->dmar_enabled = false;
-    s->intr_enabled = false;
-    s->iq_head = 0;
-    s->iq_tail = 0;
-    s->iq = 0;
-    s->iq_size = 0;
-    s->qi_enabled = false;
-    s->iq_last_desc_type = VTD_INV_DESC_NONE;
-    s->iq_dw = false;
-    s->next_frcd_reg = 0;
-
-    vtd_cap_init(s);
-
-    /*
-     * Rsvd field masks for spte
-     */
-    vtd_spte_rsvd[0] = ~0ULL;
-    vtd_spte_rsvd[1] = VTD_SPTE_PAGE_L1_RSVD_MASK(s->aw_bits,
-                                                  x86_iommu->dt_supported);
-    vtd_spte_rsvd[2] = VTD_SPTE_PAGE_L2_RSVD_MASK(s->aw_bits);
-    vtd_spte_rsvd[3] = VTD_SPTE_PAGE_L3_RSVD_MASK(s->aw_bits);
-    vtd_spte_rsvd[4] = VTD_SPTE_PAGE_L4_RSVD_MASK(s->aw_bits);
-
-    vtd_spte_rsvd_large[2] = VTD_SPTE_LPAGE_L2_RSVD_MASK(s->aw_bits,
-                                                    x86_iommu->dt_supported);
-    vtd_spte_rsvd_large[3] = VTD_SPTE_LPAGE_L3_RSVD_MASK(s->aw_bits,
-                                                    x86_iommu->dt_supported);
-
-    if (s->scalable_mode || s->snoop_control) {
-        vtd_spte_rsvd[1] &= ~VTD_SPTE_SNP;
-        vtd_spte_rsvd_large[2] &= ~VTD_SPTE_SNP;
-        vtd_spte_rsvd_large[3] &= ~VTD_SPTE_SNP;
     }
 
     vtd_reset_caches(s);
@@ -4233,8 +4107,6 @@ static AddressSpace *vtd_host_dma_iommu(PCIBus *bus, void *opaque, int devfn)
 
 static PCIIOMMUOps vtd_iommu_ops = {
     .get_address_space = vtd_host_dma_iommu,
-    .set_iommu_device = vtd_dev_set_iommu_device,
-    .unset_iommu_device = vtd_dev_unset_iommu_device,
 };
 
 static bool vtd_decide_config(IntelIOMMUState *s, Error **errp)
@@ -4354,8 +4226,6 @@ static void vtd_realize(DeviceState *dev, Error **errp)
                                      g_free, g_free);
     s->vtd_address_spaces = g_hash_table_new_full(vtd_as_hash, vtd_as_equal,
                                       g_free, g_free);
-    s->vtd_host_iommu_dev = g_hash_table_new_full(vtd_hiod_hash, vtd_hiod_equal,
-                                                  g_free, vtd_hiod_destroy);
     vtd_init(s);
     pci_setup_iommu(bus, &vtd_iommu_ops, dev);
     /* Pseudo address space under root PCI bus. */

@@ -62,8 +62,6 @@ const int vdpa_feature_bits[] = {
     VIRTIO_F_RING_PACKED,
     VIRTIO_F_RING_RESET,
     VIRTIO_F_VERSION_1,
-    VIRTIO_F_IN_ORDER,
-    VIRTIO_F_NOTIFICATION_DATA,
     VIRTIO_NET_F_CSUM,
     VIRTIO_NET_F_CTRL_GUEST_OFFLOADS,
     VIRTIO_NET_F_CTRL_MAC_ADDR,
@@ -88,7 +86,6 @@ const int vdpa_feature_bits[] = {
     VIRTIO_NET_F_MQ,
     VIRTIO_NET_F_MRG_RXBUF,
     VIRTIO_NET_F_MTU,
-    VIRTIO_NET_F_RSC_EXT,
     VIRTIO_NET_F_RSS,
     VIRTIO_NET_F_STATUS,
     VIRTIO_RING_F_EVENT_IDX,
@@ -402,10 +399,7 @@ static int vhost_vdpa_net_data_load(NetClientState *nc)
     }
 
     for (int i = 0; i < v->dev->nvqs; ++i) {
-        int ret = vhost_vdpa_set_vring_ready(v, i + v->dev->vq_index);
-        if (ret < 0) {
-            return ret;
-        }
+        vhost_vdpa_set_vring_ready(v, i + v->dev->vq_index);
     }
     return 0;
 }
@@ -1244,10 +1238,7 @@ static int vhost_vdpa_net_cvq_load(NetClientState *nc)
 
     assert(nc->info->type == NET_CLIENT_DRIVER_VHOST_VDPA);
 
-    r = vhost_vdpa_set_vring_ready(v, v->dev->vq_index);
-    if (unlikely(r < 0)) {
-        return r;
-    }
+    vhost_vdpa_set_vring_ready(v, v->dev->vq_index);
 
     if (v->shadow_vqs_enabled) {
         n = VIRTIO_NET(v->dev->vdev);
@@ -1286,10 +1277,7 @@ static int vhost_vdpa_net_cvq_load(NetClientState *nc)
     }
 
     for (int i = 0; i < v->dev->vq_index; ++i) {
-        r = vhost_vdpa_set_vring_ready(v, i);
-        if (unlikely(r < 0)) {
-            return r;
-        }
+        vhost_vdpa_set_vring_ready(v, i);
     }
 
     return 0;

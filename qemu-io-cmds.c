@@ -1739,26 +1739,12 @@ static int zone_report_f(BlockBackend *blk, int argc, char **argv)
 {
     int ret;
     int64_t offset;
-    int64_t val;
     unsigned int nr_zones;
 
     ++optind;
     offset = cvtnum(argv[optind]);
-    if (offset < 0) {
-        print_cvtnum_err(offset, argv[optind]);
-        return offset;
-    }
     ++optind;
-    val = cvtnum(argv[optind]);
-    if (val < 0) {
-        print_cvtnum_err(val, argv[optind]);
-        return val;
-    }
-    if (val > UINT_MAX) {
-        printf("Number of zones must be less than 2^32\n");
-        return -ERANGE;
-    }
-    nr_zones = val;
+    nr_zones = cvtnum(argv[optind]);
 
     g_autofree BlockZoneDescriptor *zones = NULL;
     zones = g_new(BlockZoneDescriptor, nr_zones);
@@ -1794,16 +1780,8 @@ static int zone_open_f(BlockBackend *blk, int argc, char **argv)
     int64_t offset, len;
     ++optind;
     offset = cvtnum(argv[optind]);
-    if (offset < 0) {
-        print_cvtnum_err(offset, argv[optind]);
-        return offset;
-    }
     ++optind;
     len = cvtnum(argv[optind]);
-    if (len < 0) {
-        print_cvtnum_err(len, argv[optind]);
-        return len;
-    }
     ret = blk_zone_mgmt(blk, BLK_ZO_OPEN, offset, len);
     if (ret < 0) {
         printf("zone open failed: %s\n", strerror(-ret));
@@ -1827,16 +1805,8 @@ static int zone_close_f(BlockBackend *blk, int argc, char **argv)
     int64_t offset, len;
     ++optind;
     offset = cvtnum(argv[optind]);
-    if (offset < 0) {
-        print_cvtnum_err(offset, argv[optind]);
-        return offset;
-    }
     ++optind;
     len = cvtnum(argv[optind]);
-    if (len < 0) {
-        print_cvtnum_err(len, argv[optind]);
-        return len;
-    }
     ret = blk_zone_mgmt(blk, BLK_ZO_CLOSE, offset, len);
     if (ret < 0) {
         printf("zone close failed: %s\n", strerror(-ret));
@@ -1860,16 +1830,8 @@ static int zone_finish_f(BlockBackend *blk, int argc, char **argv)
     int64_t offset, len;
     ++optind;
     offset = cvtnum(argv[optind]);
-    if (offset < 0) {
-        print_cvtnum_err(offset, argv[optind]);
-        return offset;
-    }
     ++optind;
     len = cvtnum(argv[optind]);
-    if (len < 0) {
-        print_cvtnum_err(len, argv[optind]);
-        return len;
-    }
     ret = blk_zone_mgmt(blk, BLK_ZO_FINISH, offset, len);
     if (ret < 0) {
         printf("zone finish failed: %s\n", strerror(-ret));
@@ -1893,16 +1855,8 @@ static int zone_reset_f(BlockBackend *blk, int argc, char **argv)
     int64_t offset, len;
     ++optind;
     offset = cvtnum(argv[optind]);
-    if (offset < 0) {
-        print_cvtnum_err(offset, argv[optind]);
-        return offset;
-    }
     ++optind;
     len = cvtnum(argv[optind]);
-    if (len < 0) {
-        print_cvtnum_err(len, argv[optind]);
-        return len;
-    }
     ret = blk_zone_mgmt(blk, BLK_ZO_RESET, offset, len);
     if (ret < 0) {
         printf("zone reset failed: %s\n", strerror(-ret));

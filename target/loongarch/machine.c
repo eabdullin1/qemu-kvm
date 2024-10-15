@@ -8,7 +8,6 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "migration/cpu.h"
-#include "sysemu/tcg.h"
 #include "vec.h"
 
 static const VMStateDescription vmstate_fpu_reg = {
@@ -110,15 +109,9 @@ static const VMStateDescription vmstate_lasx = {
     },
 };
 
-#if defined(CONFIG_TCG) && !defined(CONFIG_USER_ONLY)
-static bool tlb_needed(void *opaque)
-{
-    return tcg_enabled();
-}
-
 /* TLB state */
-static const VMStateDescription vmstate_tlb_entry = {
-    .name = "cpu/tlb_entry",
+const VMStateDescription vmstate_tlb = {
+    .name = "cpu/tlb",
     .version_id = 0,
     .minimum_version_id = 0,
     .fields = (const VMStateField[]) {
@@ -129,24 +122,11 @@ static const VMStateDescription vmstate_tlb_entry = {
     }
 };
 
-static const VMStateDescription vmstate_tlb = {
-    .name = "cpu/tlb",
-    .version_id = 0,
-    .minimum_version_id = 0,
-    .needed = tlb_needed,
-    .fields = (const VMStateField[]) {
-        VMSTATE_STRUCT_ARRAY(env.tlb, LoongArchCPU, LOONGARCH_TLB_MAX,
-                             0, vmstate_tlb_entry, LoongArchTLB),
-        VMSTATE_END_OF_LIST()
-    }
-};
-#endif
-
 /* LoongArch CPU state */
 const VMStateDescription vmstate_loongarch_cpu = {
     .name = "cpu",
-    .version_id = 2,
-    .minimum_version_id = 2,
+    .version_id = 1,
+    .minimum_version_id = 1,
     .fields = (const VMStateField[]) {
         VMSTATE_UINTTL_ARRAY(env.gpr, LoongArchCPU, 32),
         VMSTATE_UINTTL(env.pc, LoongArchCPU),
@@ -207,8 +187,9 @@ const VMStateDescription vmstate_loongarch_cpu = {
         VMSTATE_UINT64(env.CSR_DBG, LoongArchCPU),
         VMSTATE_UINT64(env.CSR_DERA, LoongArchCPU),
         VMSTATE_UINT64(env.CSR_DSAVE, LoongArchCPU),
-
-        VMSTATE_UINT64(kvm_state_counter, LoongArchCPU),
+        /* TLB */
+        VMSTATE_STRUCT_ARRAY(env.tlb, LoongArchCPU, LOONGARCH_TLB_MAX,
+                             0, vmstate_tlb, LoongArchTLB),
 
         VMSTATE_END_OF_LIST()
     },
@@ -216,9 +197,6 @@ const VMStateDescription vmstate_loongarch_cpu = {
         &vmstate_fpu,
         &vmstate_lsx,
         &vmstate_lasx,
-#if defined(CONFIG_TCG) && !defined(CONFIG_USER_ONLY)
-        &vmstate_tlb,
-#endif
         NULL
     }
 };

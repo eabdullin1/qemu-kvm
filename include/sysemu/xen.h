@@ -16,13 +16,13 @@
 
 #include "exec/cpu-common.h"
 
-#ifdef COMPILING_PER_TARGET
+#ifdef NEED_CPU_H
 # ifdef CONFIG_XEN
 #  define CONFIG_XEN_IS_POSSIBLE
 # endif
 #else
 # define CONFIG_XEN_IS_POSSIBLE
-#endif /* COMPILING_PER_TARGET */
+#endif
 
 #ifdef CONFIG_XEN_IS_POSSIBLE
 
@@ -49,6 +49,4 @@ static inline void xen_ram_alloc(ram_addr_t ram_addr, ram_addr_t size,
 
 #endif /* CONFIG_XEN_IS_POSSIBLE */
 
-bool xen_mr_is_memory(MemoryRegion *mr);
-bool xen_mr_is_grants(MemoryRegion *mr);
 #endif

@@ -24,7 +24,6 @@
 #include "internals.h"
 #include "pmu.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "instmap.h"
 #include "tcg/tcg-op.h"
 #include "trace.h"
@@ -73,7 +72,7 @@ void cpu_get_tb_cpu_state(CPURISCVState *env, vaddr *pc,
     *pc = env->xl == MXL_RV32 ? env->pc & UINT32_MAX : env->pc;
     *cs_base = 0;
 
-    if (cpu->cfg.ext_zve32x) {
+    if (cpu->cfg.ext_zve32f) {
         /*
          * If env->vl equals to VLMAX, we can use generic vector operation
          * expanders (GVEC) to accerlate the vector operations.
@@ -619,6 +618,30 @@ void riscv_cpu_set_geilen(CPURISCVState *env, target_ulong geilen)
     env->geilen = geilen;
 }
 
+/* This function can only be called to set virt when RVH is enabled */
+void riscv_cpu_set_virt_enabled(CPURISCVState *env, bool enable)
+{
+    /* Flush the TLB on all virt mode changes. */
+    if (env->virt_enabled != enable) {
+        tlb_flush(env_cpu(env));
+    }
+
+    env->virt_enabled = enable;
+
+    if (enable) {
+        /*
+         * The guest external interrupts from an interrupt controller are
+         * delivered only when the Guest/VM is running (i.e. V=1). This means
+         * any guest external interrupt which is triggered while the Guest/VM
+         * is not running (i.e. V=0) will be missed on QEMU resulting in guest
+         * with sluggish response to serial console input and other I/O events.
+         *
+         * To solve this, we check and inject interrupt after setting V=1.
+         */
+        riscv_cpu_update_mip(env, 0, 0);
+    }
+}
+
 int riscv_cpu_claim_interrupts(RISCVCPU *cpu, uint64_t interrupts)
 {
     CPURISCVState *env = &cpu->env;
@@ -691,18 +714,13 @@ void riscv_cpu_set_aia_ireg_rmw_fn(CPURISCVState *env, uint32_t priv,
     }
 }
 
-void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv, bool virt_en)
+void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv)
 {
     g_assert(newpriv <= PRV_M && newpriv != PRV_RESERVED);
 
-    if (newpriv != env->priv || env->virt_enabled != virt_en) {
-        if (icount_enabled()) {
-            riscv_itrigger_update_priv(env);
-        }
-
-        riscv_pmu_update_fixed_ctrs(env, newpriv, virt_en);
+    if (icount_enabled() && newpriv != env->priv) {
+        riscv_itrigger_update_priv(env);
     }
-
     /* tlb_flush is unnecessary as mode is contained in mmu_idx */
     env->priv = newpriv;
     env->xl = cpu_recompute_xl(env);
@@ -717,28 +735,6 @@ void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv, bool virt_en)
      * preemptive context switch. As a result, do both.
      */
     env->load_res = -1;
-
-    if (riscv_has_ext(env, RVH)) {
-        /* Flush the TLB on all virt mode changes. */
-        if (env->virt_enabled != virt_en) {
-            tlb_flush(env_cpu(env));
-        }
-
-        env->virt_enabled = virt_en;
-        if (virt_en) {
-            /*
-             * The guest external interrupts from an interrupt controller are
-             * delivered only when the Guest/VM is running (i.e. V=1). This
-             * means any guest external interrupt which is triggered while the
-             * Guest/VM is not running (i.e. V=0) will be missed on QEMU
-             * resulting in guest with sluggish response to serial console
-             * input and other I/O events.
-             *
-             * To solve this, we check and inject interrupt after setting V=1.
-             */
-            riscv_cpu_update_mip(env, 0, 0);
-        }
-    }
 }
 
 /*
@@ -1180,30 +1176,28 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
 
     switch (access_type) {
     case MMU_INST_FETCH:
-        if (pmp_violation) {
-            cs->exception_index = RISCV_EXCP_INST_ACCESS_FAULT;
-        } else if (env->virt_enabled && !first_stage) {
+        if (env->virt_enabled && !first_stage) {
             cs->exception_index = RISCV_EXCP_INST_GUEST_PAGE_FAULT;
         } else {
-            cs->exception_index = RISCV_EXCP_INST_PAGE_FAULT;
+            cs->exception_index = pmp_violation ?
+                RISCV_EXCP_INST_ACCESS_FAULT : RISCV_EXCP_INST_PAGE_FAULT;
         }
         break;
     case MMU_DATA_LOAD:
-        if (pmp_violation) {
-            cs->exception_index = RISCV_EXCP_LOAD_ACCESS_FAULT;
-        } else if (two_stage && !first_stage) {
+        if (two_stage && !first_stage) {
             cs->exception_index = RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT;
         } else {
-            cs->exception_index = RISCV_EXCP_LOAD_PAGE_FAULT;
+            cs->exception_index = pmp_violation ?
+                RISCV_EXCP_LOAD_ACCESS_FAULT : RISCV_EXCP_LOAD_PAGE_FAULT;
         }
         break;
     case MMU_DATA_STORE:
-        if (pmp_violation) {
-            cs->exception_index = RISCV_EXCP_STORE_AMO_ACCESS_FAULT;
-        } else if (two_stage && !first_stage) {
+        if (two_stage && !first_stage) {
             cs->exception_index = RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT;
         } else {
-            cs->exception_index = RISCV_EXCP_STORE_PAGE_FAULT;
+            cs->exception_index = pmp_violation ?
+                RISCV_EXCP_STORE_AMO_ACCESS_FAULT :
+                RISCV_EXCP_STORE_PAGE_FAULT;
         }
         break;
     default:
@@ -1379,17 +1373,17 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                               __func__, pa, ret, prot_pmp, tlb_size);
 
                 prot &= prot_pmp;
-            } else {
+            }
+
+            if (ret != TRANSLATE_SUCCESS) {
                 /*
                  * Guest physical address translation failed, this is a HS
                  * level exception
                  */
                 first_stage_error = false;
-                if (ret != TRANSLATE_PMP_FAIL) {
-                    env->guest_phys_fault_addr = (im_address |
-                                                  (address &
-                                                   (TARGET_PAGE_SIZE - 1))) >> 2;
-                }
+                env->guest_phys_fault_addr = (im_address |
+                                              (address &
+                                               (TARGET_PAGE_SIZE - 1))) >> 2;
             }
         }
     } else {
@@ -1640,6 +1634,7 @@ static target_ulong riscv_transformed_insn(CPURISCVState *env,
 
     return xinsn;
 }
+#endif /* !CONFIG_USER_ONLY */
 
 /*
  * Handle Traps
@@ -1649,9 +1644,10 @@ static target_ulong riscv_transformed_insn(CPURISCVState *env,
  */
 void riscv_cpu_do_interrupt(CPUState *cs)
 {
+#if !defined(CONFIG_USER_ONLY)
+
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
-    bool virt = env->virt_enabled;
     bool write_gva = false;
     uint64_t s;
 
@@ -1721,7 +1717,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             tval = env->bins;
             break;
         case RISCV_EXCP_BREAKPOINT:
-            tval = env->badaddr;
             if (cs->watchpoint_hit) {
                 tval = cs->watchpoint_hit->hitaddr;
                 cs->watchpoint_hit = NULL;
@@ -1782,7 +1777,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
                 htval = env->guest_phys_fault_addr;
 
-                virt = false;
+                riscv_cpu_set_virt_enabled(env, 0);
             } else {
                 /* Trap into HS mode */
                 env->hstatus = set_field(env->hstatus, HSTATUS_SPV, false);
@@ -1803,7 +1798,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         env->htinst = tinst;
         env->pc = (env->stvec >> 2 << 2) +
                   ((async && (env->stvec & 3) == 1) ? cause * 4 : 0);
-        riscv_cpu_set_mode(env, PRV_S, virt);
+        riscv_cpu_set_mode(env, PRV_S);
     } else {
         /* handle the trap in M-mode */
         if (riscv_has_ext(env, RVH)) {
@@ -1819,7 +1814,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             mtval2 = env->guest_phys_fault_addr;
 
             /* Trapping to M mode, virt is disabled */
-            virt = false;
+            riscv_cpu_set_virt_enabled(env, 0);
         }
 
         s = env->mstatus;
@@ -1834,7 +1829,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         env->mtinst = tinst;
         env->pc = (env->mtvec >> 2 << 2) +
                   ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
-        riscv_cpu_set_mode(env, PRV_M, virt);
+        riscv_cpu_set_mode(env, PRV_M);
     }
 
     /*
@@ -1846,6 +1841,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
     env->two_stage_lookup = false;
     env->two_stage_indirect_lookup = false;
+#endif
+    cs->exception_index = RISCV_EXCP_NONE; /* mark handled to qemu */
 }
-
-#endif /* !CONFIG_USER_ONLY */

@@ -1128,10 +1128,7 @@ static uint64_t dwc2_hsotg_read(void *ptr, hwaddr addr, unsigned size)
         val = dwc2_pcgreg_read(ptr, addr, (addr - HSOTG_REG(0xe00)) >> 2, size);
         break;
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%"HWADDR_PRIx"\n",
-                      __func__, addr);
-        val = 0;
-        break;
+        g_assert_not_reached();
     }
 
     return val;
@@ -1163,9 +1160,7 @@ static void dwc2_hsotg_write(void *ptr, hwaddr addr, uint64_t val,
         dwc2_pcgreg_write(ptr, addr, (addr - HSOTG_REG(0xe00)) >> 2, val, size);
         break;
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: Bad offset 0x%"HWADDR_PRIx"\n",
-                      __func__, addr);
-        break;
+        g_assert_not_reached();
     }
 }
 
@@ -1310,7 +1305,7 @@ static void dwc2_reset_enter(Object *obj, ResetType type)
     }
 }
 
-static void dwc2_reset_hold(Object *obj, ResetType type)
+static void dwc2_reset_hold(Object *obj)
 {
     DWC2Class *c = DWC2_USB_GET_CLASS(obj);
     DWC2State *s = DWC2_USB(obj);
@@ -1318,13 +1313,13 @@ static void dwc2_reset_hold(Object *obj, ResetType type)
     trace_usb_dwc2_reset_hold();
 
     if (c->parent_phases.hold) {
-        c->parent_phases.hold(obj, type);
+        c->parent_phases.hold(obj);
     }
 
     dwc2_update_irq(s);
 }
 
-static void dwc2_reset_exit(Object *obj, ResetType type)
+static void dwc2_reset_exit(Object *obj)
 {
     DWC2Class *c = DWC2_USB_GET_CLASS(obj);
     DWC2State *s = DWC2_USB(obj);
@@ -1332,7 +1327,7 @@ static void dwc2_reset_exit(Object *obj, ResetType type)
     trace_usb_dwc2_reset_exit();
 
     if (c->parent_phases.exit) {
-        c->parent_phases.exit(obj, type);
+        c->parent_phases.exit(obj);
     }
 
     s->hprt0 = HPRT0_PWR;

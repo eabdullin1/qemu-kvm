@@ -30,7 +30,6 @@
 #include "migration/blocker.h"
 #include "hw/core/cpu.h"
 #include "win_dump.h"
-#include "qemu/range.h"
 
 #include <zlib.h>
 #ifdef CONFIG_LZO
@@ -575,10 +574,8 @@ static void get_offset_range(hwaddr phys_addr,
 
     QTAILQ_FOREACH(block, &s->guest_phys_blocks.head, next) {
         if (dump_has_filter(s)) {
-            if (!ranges_overlap(block->target_start,
-                                block->target_end - block->target_start,
-                                s->filter_area_begin,
-                                s->filter_area_length)) {
+            if (block->target_start >= s->filter_area_begin + s->filter_area_length ||
+                block->target_end <= s->filter_area_begin) {
                 /* This block is out of the range */
                 continue;
             }
@@ -737,9 +734,8 @@ int64_t dump_filtered_memblock_start(GuestPhysBlock *block,
 {
     if (filter_area_length) {
         /* return -1 if the block is not within filter area */
-        if (!ranges_overlap(block->target_start,
-                            block->target_end - block->target_start,
-                            filter_area_start, filter_area_length)) {
+        if (block->target_start >= filter_area_start + filter_area_length ||
+            block->target_end <= filter_area_start) {
             return -1;
         }
 

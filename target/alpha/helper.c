@@ -21,7 +21,6 @@
 #include "qemu/log.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "fpu/softfloat-types.h"
 #include "exec/helper-proto.h"
 #include "qemu/qemu-print.h"
@@ -125,7 +124,7 @@ void alpha_cpu_record_sigsegv(CPUState *cs, vaddr address,
                               MMUAccessType access_type,
                               bool maperr, uintptr_t retaddr)
 {
-    CPUAlphaState *env = cpu_env(cs);
+    AlphaCPU *cpu = ALPHA_CPU(cs);
     target_ulong mmcsr, cause;
 
     /* Assuming !maperr, infer the missing protection. */
@@ -156,9 +155,9 @@ void alpha_cpu_record_sigsegv(CPUState *cs, vaddr address,
     }
 
     /* Record the arguments that PALcode would give to the kernel. */
-    env->trap_arg0 = address;
-    env->trap_arg1 = mmcsr;
-    env->trap_arg2 = cause;
+    cpu->env.trap_arg0 = address;
+    cpu->env.trap_arg1 = mmcsr;
+    cpu->env.trap_arg2 = cause;
 }
 #else
 /* Returns the OSF/1 entMM failure indication, or -1 on success.  */

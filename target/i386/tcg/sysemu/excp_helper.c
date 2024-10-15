@@ -21,7 +21,6 @@
 #include "cpu.h"
 #include "exec/cpu_ldst.h"
 #include "exec/exec-all.h"
-#include "exec/page-protection.h"
 #include "tcg/helper-tcg.h"
 
 typedef struct TranslateParams {

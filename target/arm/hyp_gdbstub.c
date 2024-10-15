@@ -12,7 +12,7 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "internals.h"
-#include "gdbstub/enums.h"
+#include "exec/gdbstub.h"
 
 /* Maximum and current break/watch point counts */
 int max_hw_bps, max_hw_wps;

@@ -12,9 +12,6 @@
 #ifdef CONFIG_TCG_INTERPRETER
 #include <ffi.h>
 #endif
-#include "tcg-target-reg-bits.h"
-
-#define MAX_CALL_IARGS  7
 
 /*
  * Describe the calling convention of a given argument type.

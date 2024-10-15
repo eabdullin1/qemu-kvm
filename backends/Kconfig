@@ -3,7 +3,3 @@ source tpm/Kconfig
 config IOMMUFD
     bool
     depends on VFIO
-
-config SPDM_SOCKET
-    bool
-    default y

@@ -1437,9 +1437,11 @@ static void monitor_event(void *opaque, QEMUChrEvent event)
             monitor_resume(mon);
         }
         qemu_mutex_unlock(&mon->mon_lock);
+        mon_refcount++;
         break;
 
     case CHR_EVENT_CLOSED:
+        mon_refcount--;
         monitor_fdsets_cleanup();
         break;
 

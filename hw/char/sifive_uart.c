@@ -214,7 +214,7 @@ static void sifive_uart_reset_enter(Object *obj, ResetType type)
     s->rx_fifo_len = 0;
 }
 
-static void sifive_uart_reset_hold(Object *obj, ResetType type)
+static void sifive_uart_reset_hold(Object *obj)
 {
     SiFiveUARTState *s = SIFIVE_UART(obj);
     qemu_irq_lower(s->irq);

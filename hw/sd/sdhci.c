@@ -846,7 +846,6 @@ static void sdhci_do_adma(SDHCIState *s)
                 }
             }
             if (res != MEMTX_OK) {
-                s->data_count = 0;
                 if (s->errintstsen & SDHC_EISEN_ADMAERR) {
                     trace_sdhci_error("Set ADMA error flag");
                     s->errintsts |= SDHC_EIS_ADMAERR;
@@ -984,9 +983,8 @@ static inline bool
 sdhci_buff_access_is_sequential(SDHCIState *s, unsigned byte_num)
 {
     if ((s->data_count & 0x3) != byte_num) {
-        qemu_log_mask(LOG_GUEST_ERROR,
-                      "SDHCI: Non-sequential access to Buffer Data Port"
-                      " register is prohibited\n");
+        trace_sdhci_error("Non-sequential access to Buffer Data Port register"
+                          "is prohibited\n");
         return false;
     }
     return true;

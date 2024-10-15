@@ -18,6 +18,7 @@ tests = {
   'test-forward-visitor': [testqapi],
   'test-string-input-visitor': [testqapi],
   'test-string-output-visitor': [testqapi],
+  'test-opts-visitor': [testqapi],
   'test-visitor-serialization': [testqapi],
   'test-bitmap': [],
   'test-resv-mem': [],
@@ -45,8 +46,12 @@ tests = {
   'test-qemu-opts': [],
   'test-keyval': [testqapi],
   'test-logging': [],
+  'test-uuid': [],
+  'ptimer-test': ['ptimer-test-stubs.c', meson.project_source_root() / 'hw/core/ptimer.c'],
   'test-qapi-util': [],
   'test-interval-tree': [],
+  'test-xs-node': [qom],
+  'test-virtio-dmabuf': [meson.project_source_root() / 'hw/display/virtio-dmabuf.c'],
 }
 
 if have_system or have_tools
@@ -92,18 +97,16 @@ if have_block
     'test-crypto-ivgen': [io],
     'test-crypto-afsplit': [io],
     'test-crypto-block': [io],
-    'test-timed-average': [],
-    'test-uuid': [],
   }
   if gnutls.found() and \
      tasn1.found() and \
      host_os != 'windows'
     tests += {
-      'test-crypto-tlscredsx509': ['crypto-tls-x509-helpers.c',
+      'test-crypto-tlscredsx509': ['crypto-tls-x509-helpers.c', 'pkix_asn1_tab.c',
                                    tasn1, crypto, gnutls],
-      'test-crypto-tlssession': ['crypto-tls-x509-helpers.c', 'crypto-tls-psk-helpers.c',
+      'test-crypto-tlssession': ['crypto-tls-x509-helpers.c', 'pkix_asn1_tab.c', 'crypto-tls-psk-helpers.c',
                                  tasn1, crypto, gnutls],
-      'test-io-channel-tls': ['io-channel-helpers.c', 'crypto-tls-x509-helpers.c',
+      'test-io-channel-tls': ['io-channel-helpers.c', 'crypto-tls-x509-helpers.c', 'pkix_asn1_tab.c',
                               tasn1, io, crypto, gnutls]}
   endif
   if pam.found()
@@ -128,13 +131,10 @@ endif
 
 if have_system
   tests += {
-    'ptimer-test': ['ptimer-test-stubs.c', meson.project_source_root() / 'hw/core/ptimer.c'],
     'test-iov': [],
-    'test-opts-visitor': [testqapi],
-    'test-xs-node': [qom],
-    'test-virtio-dmabuf': [meson.project_source_root() / 'hw/display/virtio-dmabuf.c'],
     'test-qmp-cmds': [testqapi],
     'test-xbzrle': [migration],
+    'test-timed-average': [],
     'test-util-sockets': ['socket-helpers.c'],
     'test-base64': [],
     'test-bufferiszero': [],

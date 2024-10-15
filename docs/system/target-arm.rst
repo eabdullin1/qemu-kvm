@@ -86,16 +86,16 @@ undocumented; you can get a complete list by running
    arm/bananapi_m2u.rst
    arm/b-l475e-iot01a.rst
    arm/sabrelite
-   arm/highbank
    arm/digic
    arm/cubieboard
    arm/emcraft-sf2
+   arm/highbank
    arm/musicpal
    arm/gumstix
    arm/mainstone
    arm/kzm
-   arm/nseries
    arm/nrf
+   arm/nseries
    arm/nuvoton
    arm/imx25-pdk
    arm/orangepi
@@ -107,9 +107,8 @@ undocumented; you can get a complete list by running
    arm/stellaris
    arm/stm32
    arm/virt
-   arm/xenpvh
    arm/xlnx-versal-virt
-   arm/xlnx-zynq
+   arm/xenpvh
 
 Emulated CPU architecture support
 =================================

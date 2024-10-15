@@ -128,9 +128,8 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
         }
     }
     while (field->name) {
-        bool exists = vmstate_field_exists(vmsd, field, opaque, version_id);
-        trace_vmstate_load_state_field(vmsd->name, field->name, exists);
-        if (exists) {
+        trace_vmstate_load_state_field(vmsd->name, field->name);
+        if (vmstate_field_exists(vmsd, field, opaque, version_id)) {
             void *first_elem = opaque + field->offset;
             int i, n_elems = vmstate_n_elems(opaque, field);
             int size = vmstate_size(opaque, field);
@@ -479,7 +478,7 @@ static int vmstate_subsection_load(QEMUFile *f, const VMStateDescription *vmsd,
 
         len = qemu_peek_byte(f, 1);
         if (len < strlen(vmsd->name) + 1) {
-            /* subsection name has to be "section_name/a" */
+            /* subsection name has be be "section_name/a" */
             trace_vmstate_subsection_load_bad(vmsd->name, "(short)", "");
             return 0;
         }
