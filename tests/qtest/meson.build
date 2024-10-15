@@ -91,7 +91,7 @@ qtests_i386 = \
    config_all_devices.has_key('CONFIG_PARALLEL') ? ['bios-tables-test'] : []) +             \
   qtests_pci +                                                                              \
   qtests_cxl +                                                                              \
-  ['fdc-test',
+  [
    'ide-test',
    'hd-geo-test',
    'boot-order-test',
@@ -102,7 +102,6 @@ qtests_i386 = \
    'drive_del-test',
    'tco-test',
    'cpu-plug-test',
-   'q35-test',
    'vmgenid-test',
    'migration-test',
    'test-x86-cpuid-compat',

@@ -276,6 +276,46 @@ const size_t pc_compat_2_4_len = G_N_ELEMENTS(pc_compat_2_4);
  */
 #define PC_FW_DATA (0x20000 + 0x8000)
 
+/* This macro is for changes to properties that are RHEL specific,
+ * different to the current upstream and to be applied to the latest
+ * machine type.
+ */
+GlobalProperty pc_rhel_compat[] = {
+    /* we don't support s3/s4 suspend */
+    { "PIIX4_PM", "disable_s3", "1" },
+    { "PIIX4_PM", "disable_s4", "1" },
+    { "ICH9-LPC", "disable_s3", "1" },
+    { "ICH9-LPC", "disable_s4", "1" },
+
+    { TYPE_X86_CPU, "host-phys-bits", "on" },
+    { TYPE_X86_CPU, "host-phys-bits-limit", "48" },
+    { TYPE_X86_CPU, "vmx-entry-load-perf-global-ctrl", "off" },
+    { TYPE_X86_CPU, "vmx-exit-load-perf-global-ctrl", "off" },
+    /* bz 1508330 */
+    { "vfio-pci", "x-no-geforce-quirks", "on" },
+    /* bz 1941397 */
+    { TYPE_X86_CPU, "kvm-asyncpf-int", "on" },
+};
+const size_t pc_rhel_compat_len = G_N_ELEMENTS(pc_rhel_compat);
+
+GlobalProperty pc_rhel_9_3_compat[] = {
+    /* pc_rhel_9_3_compat from pc_compat_8_0 */
+    { "virtio-mem", "unplugged-inaccessible", "auto" },
+};
+const size_t pc_rhel_9_3_compat_len = G_N_ELEMENTS(pc_rhel_9_3_compat);
+
+GlobalProperty pc_rhel_9_2_compat[] = {
+    /* pc_rhel_9_2_compat from pc_compat_7_2 */
+    { "ICH9-LPC", "noreboot", "true" },
+};
+const size_t pc_rhel_9_2_compat_len = G_N_ELEMENTS(pc_rhel_9_2_compat);
+
+GlobalProperty pc_rhel_9_0_compat[] = {
+    /* pc_rhel_9_0_compat from pc_compat_6_2 */
+    { "virtio-mem", "unplugged-inaccessible", "off" },
+};
+const size_t pc_rhel_9_0_compat_len = G_N_ELEMENTS(pc_rhel_9_0_compat);
+
 GSIState *pc_gsi_create(qemu_irq **irqs, bool pci_enabled)
 {
     GSIState *s;
@@ -1767,6 +1807,7 @@ static void pc_machine_class_init(ObjectClass *oc, void *data)
     pcmc->kvmclock_create_always = true;
     x86mc->apic_xrupt_override = true;
     assert(!mc->get_hotplug_handler);
+    mc->async_pf_vmexit_disable = false;
     mc->get_hotplug_handler = pc_get_hotplug_handler;
     mc->hotplug_allowed = pc_hotplug_allowed;
     mc->auto_enable_numa_with_memhp = true;
@@ -1774,7 +1815,8 @@ static void pc_machine_class_init(ObjectClass *oc, void *data)
     mc->has_hotpluggable_cpus = true;
     mc->default_boot_order = "cad";
     mc->block_default_type = IF_IDE;
-    mc->max_cpus = 255;
+    /* 240: max CPU count for RHEL */
+    mc->max_cpus = 240;
     mc->reset = pc_machine_reset;
     mc->wakeup = pc_machine_wakeup;
     hc->pre_plug = pc_machine_device_pre_plug_cb;

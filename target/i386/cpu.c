@@ -2411,9 +2411,13 @@ static const CPUCaches epyc_genoa_cache_info = {
  *  PT in VMX operation
  */
 
+#define RHEL_CPU_DEPRECATION \
+    "use at least 'Haswell' / 'EPYC', or 'host' / 'max'"
+
 static const X86CPUDefinition builtin_x86_defs[] = {
     {
         .name = "qemu64",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 0xd,
         .vendor = CPUID_VENDOR_AMD,
         .family = 15,
@@ -2432,6 +2436,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x8000000A,
         .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION,
     },
+#if 0 // Deprecated CPU models are removed in RHEL-10
     {
         .name = "phenom",
         .level = 5,
@@ -2796,8 +2801,10 @@ static const X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x80000008,
         .model_id = "Intel Core 2 Duo P9xxx (Penryn Class Core 2)",
     },
+#endif // Removal of deprecated CPU models in RHEL-10
     {
         .name = "Nehalem",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 11,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
@@ -2875,6 +2882,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "Westmere",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 11,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
@@ -2956,6 +2964,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "SandyBridge",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 0xd,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
@@ -3042,6 +3051,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "IvyBridge",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 0xd,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
@@ -4469,6 +4479,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "Denverton",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 21,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
@@ -4579,6 +4590,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "Snowridge",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 27,
         .vendor = CPUID_VENDOR_INTEL,
         .family = 6,
@@ -4760,8 +4772,10 @@ static const X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x80000008,
         .model_id = "Intel Xeon Phi Processor (Knights Mill)",
     },
+#if 0 // Deprecated CPU models are removed in RHEL-10
     {
         .name = "Opteron_G1",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 5,
         .vendor = CPUID_VENDOR_AMD,
         .family = 15,
@@ -4782,6 +4796,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "Opteron_G2",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 5,
         .vendor = CPUID_VENDOR_AMD,
         .family = 15,
@@ -4804,6 +4819,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "Opteron_G3",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 5,
         .vendor = CPUID_VENDOR_AMD,
         .family = 16,
@@ -4827,8 +4843,10 @@ static const X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x80000008,
         .model_id = "AMD Opteron 23xx (Gen 3 Class Opteron)",
     },
+#endif
     {
         .name = "Opteron_G4",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 0xd,
         .vendor = CPUID_VENDOR_AMD,
         .family = 21,
@@ -4861,6 +4879,7 @@ static const X86CPUDefinition builtin_x86_defs[] = {
     },
     {
         .name = "Opteron_G5",
+        .deprecation_note = RHEL_CPU_DEPRECATION,
         .level = 0xd,
         .vendor = CPUID_VENDOR_AMD,
         .family = 21,
